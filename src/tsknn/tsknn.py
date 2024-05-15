@@ -19,7 +19,7 @@ def get_distance(distance="euclidean"):
 
 
 class tsknn:
-    def __init__(self, 
+    def __init__(self,
                  k=3,
                  cf="mean",
                  transform=None,  # "additive", "multiplicative"
@@ -73,9 +73,9 @@ class tsknn:
         k_closest = k_closest[:, np.newaxis] + np.tile(np.arange(self.h_ef), (len(k_closest), 1)) + self.k
 
         if self.transform == "multiplicative":
-            X = self.X[self.k:] / self.x_mean
-            return np.take(X, k_closest-self.k)/(self.x_mean[k_closest-self.k]) * self.x_pred_mean
-            # return (np.take(X, k_closest-self.k)/(self.x_mean[k_closest[:,0]-self.k,np.newaxis])) * self.x_pred_mean
+            X = self.X[self.k:] #/ self.x_mean
+            #return np.take(X, k_closest-s;elf.k)/(self.x_mean[k_closest-self.k]) * self.x_pred_mean
+            return (np.take(X, k_closest-self.k)/(self.x_mean[k_closest[:,0]-self.k,np.newaxis])) * self.x_pred_mean
         elif self.transform == "additive":
             X = self.X[self.k:] - self.x_mean
             return np.take(X, k_closest-self.k) + self.x_pred_mean
