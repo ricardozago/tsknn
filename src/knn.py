@@ -14,7 +14,7 @@ df = df[-24:]
 X = df.values.T[0]
 X_pred = df.values.T[0][-3:]
 
-model = tsknn(cf="mean", h=12, transform="multiplicative", lags=3, msas="mimo")
+model = tsknn(cf = "mean", h=12, transform = "multiplicative", lags = 3, k=4)
 
 model.fit(X)
 x_pred = model.predict(X_pred)

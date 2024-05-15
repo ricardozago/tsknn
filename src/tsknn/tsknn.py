@@ -70,15 +70,14 @@ class tsknn:
         '''
         Return the sequences to the knns
         '''
-        k_closest = k_closest[:, np.newaxis] + np.tile(np.arange(self.h_ef), (len(k_closest), 1)) + self.k
+        k_closest = k_closest[:, np.newaxis] + np.tile(np.arange(self.h_ef), (len(k_closest), 1)) + self.lags
 
         if self.transform == "multiplicative":
-            X = self.X[self.k:] #/ self.x_mean
-            #return np.take(X, k_closest-s;elf.k)/(self.x_mean[k_closest-self.k]) * self.x_pred_mean
-            return (np.take(X, k_closest-self.k)/(self.x_mean[k_closest[:,0]-self.k,np.newaxis])) * self.x_pred_mean
+            X = self.X[self.lags:]
+            return (np.take(X, k_closest-self.lags)/(self.x_mean[k_closest[:,0]-self.lags, np.newaxis])) * self.x_pred_mean
         elif self.transform == "additive":
-            X = self.X[self.k:] - self.x_mean
-            return np.take(X, k_closest-self.k) + self.x_pred_mean
+            X = self.X[self.lags:]
+            return (np.take(X, k_closest-self.lags) - (self.x_mean[k_closest[:,0]-self.lags, np.newaxis])) + self.x_pred_mean
 
         return np.take(self.X, k_closest)
 
