@@ -41,6 +41,8 @@ class tsknn:
             self.h_ef = h
 
     def fit(self, X):
+        if self.msas == 'mimo' and (self.h + np.max(self.lags) + self.k >= X.shape[0]):
+            raise ValueError('You need a bigger series, or change the mode to recursive')
         self.X = X
 
     def _get_k_closest_positions(self, x_pred):
@@ -51,7 +53,7 @@ class tsknn:
 
         if self.transform == "multiplicative":
             self.x_mean = windowed_arr.mean(axis=1)
-            windowed_arr = windowed_arr.copy()/self.x_mean[:, np.newaxis]
+            windowed_arr = windowed_arr.copy() / self.x_mean[:, np.newaxis]
             self.x_pred_mean = x_pred.mean()
             x_pred = x_pred / self.x_pred_mean
         elif self.transform == "additive":
@@ -60,7 +62,7 @@ class tsknn:
             self.x_pred_mean = x_pred.mean()
             x_pred = x_pred - self.x_pred_mean
 
-        windowed_arr = windowed_arr[:(1-self.h_ef) if 1-self.h_ef != 0 else None,:]
+        windowed_arr = windowed_arr[:(1 - self.h_ef) if 1 - self.h_ef != 0 else None, :]
         rolled_result = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=windowed_arr)
         index_closests = np.argpartition(rolled_result, range(self.k))[:self.k]
         distances = self.X.shape[0] - index_closests
@@ -74,10 +76,10 @@ class tsknn:
 
         if self.transform == "multiplicative":
             X = self.X[self.lags:]
-            return (np.take(X, k_closest-self.lags)/(self.x_mean[k_closest[:,0]-self.lags, np.newaxis])) * self.x_pred_mean
+            return (np.take(X, k_closest - self.lags) / (self.x_mean[k_closest[:, 0] - self.lags, np.newaxis])) * self.x_pred_mean
         elif self.transform == "additive":
             X = self.X[self.lags:]
-            return (np.take(X, k_closest-self.lags) - (self.x_mean[k_closest[:,0]-self.lags, np.newaxis])) + self.x_pred_mean
+            return (np.take(X, k_closest - self.lags) - (self.x_mean[k_closest[:, 0] - self.lags, np.newaxis])) + self.x_pred_mean
 
         return np.take(self.X, k_closest)
 
@@ -91,10 +93,12 @@ class tsknn:
             return np.median(k_closest, axis=0)
         elif self.cf == "weighted":  # to do, fix para o caso mimo
             reciprocal_d = 1 / np.sqrt(distances)
-            return reciprocal_d.dot(k_closest)[0]/reciprocal_d.sum()
+            return reciprocal_d.dot(k_closest)[0] / reciprocal_d.sum()
         return k_closest.mean()
 
     def predict(self, X):
+        if X.shape[0] != np.max(self.lags):
+            raise ValueError('The biggest lag is different of the  length of example to predict')
         if self.msas == "recursive":
             y_preds = []
             for i in range(self.h):

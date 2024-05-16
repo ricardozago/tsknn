@@ -12,9 +12,12 @@ df.head()
 
 df = df[-24:]
 X = df.values.T[0]
-X_pred = df.values.T[0][-3:]
+lags = 5
+X_pred = df.values.T[0][-lags:]
 
-model = tsknn(cf = "mean", h=12, transform = "multiplicative", lags = 3, k=4)
+# model = tsknn(cf = "mean", h=12, transform = "multiplicative", lags = 3, k=4)
+# model = tsknn(cf = "mean", h=120, transform = None, lags = lags, k=4, msas = "recursive")
+model = tsknn(cf="mean", h=5, transform="multiplicative", lags=lags, k=6, msas="mimo")
 
 model.fit(X)
 x_pred = model.predict(X_pred)
