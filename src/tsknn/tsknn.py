@@ -1,21 +1,18 @@
 from numpy.lib.stride_tricks import sliding_window_view
 import numpy as np
-import scipy
 np.set_printoptions(suppress=True)
+
+
+def sum_euclidean(M, v):
+    # https://stackoverflow.com/a/49633639
+    tmp = M-v
+    return np.einsum('ij,ij->i', tmp, tmp)
 
 
 def get_distance(distance="euclidean"):
     if distance == "euclidean":
-        return scipy.spatial.distance.sqeuclidean
-    if distance == "minkowski":
-        return scipy.spatial.distance.minkowski
-    if distance == "cityblock":
-        return scipy.spatial.distance.cityblock
-    if distance == "canberra":
-        return scipy.spatial.distance.canberra
-    if distance == "mahalanobis":
-        return scipy.spatial.distance.mahalanobis
-    return scipy.spatial.distance.sqeuclidean
+        return sum_euclidean
+    return sum_euclidean
 
 
 class tsknn:
@@ -45,25 +42,32 @@ class tsknn:
             raise ValueError('You need a bigger series, or change the mode to recursive')
         self.X = X
 
+        self.windowed_arr = sliding_window_view(self.X[:-1], window_shape=(self.lags,), axis=0)
+
+        if self.transform == "multiplicative":
+            self.x_mean = self.windowed_arr.mean(axis=1)
+            self.windowed_arr = self.windowed_arr / self.x_mean[:, np.newaxis]
+        elif self.transform == "additive":
+            self.x_mean = self.windowed_arr.mean(axis=1)
+            self.windowed_arr = self.windowed_arr - self.x_mean[:, np.newaxis]
+
+        self.windowed_arr = self.windowed_arr[:(1 - self.h_ef) if 1 - self.h_ef != 0 else None, :]
+
     def _get_k_closest_positions(self, x_pred):
         '''
         Return the position of the k nearest neighbors, the first is the closest
         '''
-        windowed_arr = sliding_window_view(self.X[:-1], window_shape=(self.lags,), axis=0)
 
         if self.transform == "multiplicative":
-            self.x_mean = windowed_arr.mean(axis=1)
-            windowed_arr = windowed_arr.copy() / self.x_mean[:, np.newaxis]
             self.x_pred_mean = x_pred.mean()
             x_pred = x_pred / self.x_pred_mean
         elif self.transform == "additive":
-            self.x_mean = windowed_arr.mean(axis=1)
-            windowed_arr = windowed_arr.copy() - self.x_mean[:, np.newaxis]
             self.x_pred_mean = x_pred.mean()
             x_pred = x_pred - self.x_pred_mean
 
-        windowed_arr = windowed_arr[:(1 - self.h_ef) if 1 - self.h_ef != 0 else None, :]
-        rolled_result = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=windowed_arr)
+        # rolled_result = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=self.windowed_arr)
+        # rolled_result = np.sum((self.windowed_arr - x_pred)**2, axis=-1)
+        rolled_result = self.func_distance(self.windowed_arr, x_pred)
         index_closests = np.argpartition(rolled_result, range(self.k))[:self.k]
         distances = self.X.shape[0] - index_closests
         return index_closests, distances
