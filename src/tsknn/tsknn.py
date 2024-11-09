@@ -5,7 +5,7 @@ np.set_printoptions(suppress=True)
 
 def sum_euclidean(M, v):
     # https://stackoverflow.com/a/49633639
-    tmp = M-v
+    tmp = M - v
     return np.einsum('ij,ij->i', tmp, tmp)
 
 
@@ -24,8 +24,8 @@ class tsknn:
                  distance="euclidean",
                  h=12,
                  msas="recursive",
-                 kmeans = None,
-                 random_state = None,
+                 kmeans=None,
+                 random_state=None,
                  ):
         self.k = k
         self.cf = cf.lower()
@@ -41,13 +41,15 @@ class tsknn:
         self.kmeans = kmeans
         self.random_state = random_state
 
-
     def fit(self, X):
         if self.msas == 'mimo' and (self.h + np.max(self.lags) + self.k >= X.shape[0]):
             raise ValueError('You need a bigger series, or change the mode to recursive')
         self.X = X
 
-        self.windowed_arr = sliding_window_view(self.X[:-1], window_shape=(self.lags,), axis=0)
+        self.windowed_arr = sliding_window_view(self.X[:-1], window_shape=(np.max(self.lags),), axis=0)
+
+        if isinstance(self.lags, list):
+            self.windowed_arr = self.windowed_arr[:, [np.max(self.lags) - x for x in self.lags]]
 
         if self.transform == "multiplicative" and not self.kmeans:
             self.x_mean = self.windowed_arr.mean(axis=1)
@@ -62,8 +64,8 @@ class tsknn:
             from sklearn.cluster import KMeans
             kmeans_model = KMeans(n_clusters=self.kmeans, random_state=self.random_state)
             kmeans_model.fit(self.windowed_arr)
-            self.kmeans_means = np.array([np.mean(self.windowed_arr[kmeans_model.labels_ == i], axis=0) 
-                                    for i in range(self.kmeans)])
+            self.kmeans_means = np.array([np.mean(self.windowed_arr[kmeans_model.labels_ == i], axis=0)
+                                          for i in range(self.kmeans)])
             self.kmeans_labels = kmeans_model.labels_
 
             if self.transform == "multiplicative":
@@ -73,11 +75,16 @@ class tsknn:
                 self.x_mean = self.kmeans_means.mean(axis=1)
                 self.kmeans_means = self.kmeans_means - self.x_mean[:, np.newaxis]
 
-
     def _get_k_closest_positions(self, x_pred):
         '''
         Return the position of the k nearest neighbors, the first is the closest
         '''
+
+        # rolled_result = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=self.windowed_arr)
+        # rolled_result = np.sum((self.windowed_arr - x_pred)**2, axis=-1)
+
+        if isinstance(self.lags, list):
+            x_pred = x_pred[[np.max(self.lags) - x for x in self.lags]]
 
         if self.transform == "multiplicative":
             self.x_pred_mean = x_pred.mean()
@@ -86,8 +93,6 @@ class tsknn:
             self.x_pred_mean = x_pred.mean()
             x_pred = x_pred - self.x_pred_mean
 
-        # rolled_result = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=self.windowed_arr)
-        # rolled_result = np.sum((self.windowed_arr - x_pred)**2, axis=-1)
         if self.kmeans:
             rolled_result = self.func_distance(self.kmeans_means, x_pred)
         else:
@@ -119,14 +124,14 @@ class tsknn:
 
             return resultado_final
 
-        k_closest = k_closest[:, np.newaxis] + np.tile(np.arange(self.h_ef), (len(k_closest), 1)) + self.lags
+        k_closest = k_closest[:, np.newaxis] + np.tile(np.arange(self.h_ef), (len(k_closest), 1)) + np.max(self.lags)
 
         if self.transform == "multiplicative":
-            X = self.X[self.lags:]
-            return (np.take(X, k_closest - self.lags) / (self.x_mean[k_closest[:, 0] - self.lags, np.newaxis])) * self.x_pred_mean
+            X = self.X[np.max(self.lags):]
+            return (np.take(X, k_closest - np.max(self.lags)) / (self.x_mean[k_closest[:, 0] - np.max(self.lags), np.newaxis])) * self.x_pred_mean
         elif self.transform == "additive":
-            X = self.X[self.lags:]
-            return (np.take(X, k_closest - self.lags) - (self.x_mean[k_closest[:, 0] - self.lags, np.newaxis])) + self.x_pred_mean
+            X = self.X[np.max(self.lags):]
+            return (np.take(X, k_closest - np.max(self.lags)) - (self.x_mean[k_closest[:, 0] - np.max(self.lags), np.newaxis])) + self.x_pred_mean
 
         return np.take(self.X, k_closest)
 
@@ -153,7 +158,7 @@ class tsknn:
                 k_closest = self._get_k_closest(index_closests)
                 y_pred = self._get_mean(k_closest, distances)[0]
                 y_preds.append(y_pred)
-                X = np.concatenate((X, np.array([y_pred])), axis=0)[-self.lags:]
+                X = np.concatenate((X, np.array([y_pred])), axis=0)[-np.max(self.lags):]
             y_preds = np.array(y_preds)
         elif self.msas == "mimo":
             index_closests, distances = self._get_k_closest_positions(X)
