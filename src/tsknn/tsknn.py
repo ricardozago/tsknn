@@ -31,6 +31,7 @@ class tsknn:
         self.cf = cf.lower()
         self.transform = transform.lower() if transform else None
         self.lags = lags
+        self.maxlags = np.max(self.lags)
         self.func_distance = get_distance(distance)
         self.h = h
         self.msas = msas.lower()
@@ -42,14 +43,14 @@ class tsknn:
         self.random_state = random_state
 
     def fit(self, X):
-        if self.msas == 'mimo' and (self.h + np.max(self.lags) + self.k >= X.shape[0]):
+        if self.msas == 'mimo' and (self.h + self.maxlags + self.k >= X.shape[0]):
             raise ValueError('You need a bigger series, or change the mode to recursive')
         self.X = X
 
-        self.windowed_arr = sliding_window_view(self.X[:-1], window_shape=(np.max(self.lags),), axis=0)
+        self.windowed_arr = sliding_window_view(self.X[:-1], window_shape=(self.maxlags,), axis=0)
 
         if isinstance(self.lags, list):
-            self.windowed_arr = self.windowed_arr[:, [np.max(self.lags) - x for x in self.lags]]
+            self.windowed_arr = self.windowed_arr[:, [self.maxlags - x for x in self.lags]]
 
         if self.transform == "multiplicative" and not self.kmeans:
             self.x_mean = self.windowed_arr.mean(axis=1)
@@ -84,7 +85,7 @@ class tsknn:
         # rolled_result = np.sum((self.windowed_arr - x_pred)**2, axis=-1)
 
         if isinstance(self.lags, list):
-            x_pred = x_pred[[np.max(self.lags) - x for x in self.lags]]
+            x_pred = x_pred[[self.maxlags - x for x in self.lags]]
 
         if self.transform == "multiplicative":
             self.x_pred_mean = x_pred.mean()
@@ -124,14 +125,14 @@ class tsknn:
 
             return resultado_final
 
-        k_closest = k_closest[:, np.newaxis] + np.tile(np.arange(self.h_ef), (len(k_closest), 1)) + np.max(self.lags)
+        k_closest = k_closest[:, np.newaxis] + np.tile(np.arange(self.h_ef), (len(k_closest), 1)) + self.maxlags
 
         if self.transform == "multiplicative":
-            X = self.X[np.max(self.lags):]
-            return (np.take(X, k_closest - np.max(self.lags)) / (self.x_mean[k_closest[:, 0] - np.max(self.lags), np.newaxis])) * self.x_pred_mean
+            X = self.X[self.maxlags:]
+            return (np.take(X, k_closest - self.maxlags) / (self.x_mean[k_closest[:, 0] - self.maxlags, np.newaxis])) * self.x_pred_mean
         elif self.transform == "additive":
-            X = self.X[np.max(self.lags):]
-            return (np.take(X, k_closest - np.max(self.lags)) - (self.x_mean[k_closest[:, 0] - np.max(self.lags), np.newaxis])) + self.x_pred_mean
+            X = self.X[self.maxlags:]
+            return (np.take(X, k_closest - self.maxlags) - (self.x_mean[k_closest[:, 0] - self.maxlags, np.newaxis])) + self.x_pred_mean
 
         return np.take(self.X, k_closest)
 
@@ -149,7 +150,7 @@ class tsknn:
         return k_closest.mean()
 
     def predict(self, X):
-        if X.shape[0] != np.max(self.lags):
+        if X.shape[0] != self.maxlags:
             raise ValueError('The biggest lag is different of the  length of example to predict')
         if self.msas == "recursive":
             y_preds = []
@@ -158,7 +159,7 @@ class tsknn:
                 k_closest = self._get_k_closest(index_closests)
                 y_pred = self._get_mean(k_closest, distances)[0]
                 y_preds.append(y_pred)
-                X = np.concatenate((X, np.array([y_pred])), axis=0)[-np.max(self.lags):]
+                X = np.concatenate((X, np.array([y_pred])), axis=0)[-self.maxlags:]
             y_preds = np.array(y_preds)
         elif self.msas == "mimo":
             index_closests, distances = self._get_k_closest_positions(X)
