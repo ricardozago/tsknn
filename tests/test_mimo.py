@@ -1,7 +1,10 @@
+"""Tests for the MIMO forecasting strategy."""
+
 from tsknn.tsknn import tsknn
 from numpy.testing import assert_almost_equal
 import pandas as pd
 import numpy as np
+
 np.set_printoptions(suppress=True)
 
 df = pd.read_csv("data/AirPassengers.csv")
@@ -17,6 +20,7 @@ X_pred = df.values.T[0][-3:]
 
 
 def test_answer():
+    """Validate predictions for the MIMO strategy."""
     model = tsknn(cf="mean", h=12, transform="multiplicative", lags=3, msas="mimo")
     model.fit(X)
     x_pred = model.predict(X_pred)

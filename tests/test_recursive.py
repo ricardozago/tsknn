@@ -1,7 +1,10 @@
+"""Tests for the recursive forecasting strategy."""
+
 from tsknn.tsknn import tsknn
 from numpy.testing import assert_almost_equal
 import pandas as pd
 import numpy as np
+
 np.set_printoptions(suppress=True)
 
 df = pd.read_csv("data/AirPassengers.csv")
@@ -16,6 +19,7 @@ X = df.values.T[0]
 
 
 def test_answer():
+    """Validate predictions for both recursive and MIMO modes."""
     X_pred = df.values.T[0][-3:]
     model = tsknn(cf="mean", h=36, transform="multiplicative", lags=3)
     model.fit(X)

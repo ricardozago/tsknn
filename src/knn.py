@@ -1,6 +1,9 @@
+"""Example script demonstrating the usage of :class:`tsknn`."""
+
 from tsknn.tsknn import tsknn
 import pandas as pd
 import numpy as np
+
 np.set_printoptions(suppress=True)
 
 df = pd.read_csv("data/AirPassengers.csv")

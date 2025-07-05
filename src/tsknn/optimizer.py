@@ -1,4 +1,6 @@
 import itertools
+"""Helper utilities for parameter optimization."""
+
 import numpy as np
 
 from .tsknn import tsknn

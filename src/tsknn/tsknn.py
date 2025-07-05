@@ -1,32 +1,66 @@
+"""Core KNN model implementation for time series forecasting."""
+
+from typing import Optional, Sequence, Union
+
 from numpy.lib.stride_tricks import sliding_window_view
 import numpy as np
+
 np.set_printoptions(suppress=True)
 
 
 def sum_euclidean(M, v):
+    """Return the euclidean distance between ``v`` and each row of ``M``."""
+
     # https://stackoverflow.com/a/49633639
-    tmp = M-v
-    return np.einsum('ij,ij->i', tmp, tmp)
+    tmp = M - v
+    return np.einsum("ij,ij->i", tmp, tmp)
 
 
-def get_distance(distance="euclidean"):
+def get_distance(distance: str = "euclidean"):
+    """Map a distance name to a distance function."""
+
     if distance == "euclidean":
         return sum_euclidean
     return sum_euclidean
 
 
 class tsknn:
-    def __init__(self,
-                 k=3,
-                 cf="mean",
-                 transform=None,  # "additive", "multiplicative"
-                 lags=3,
-                 distance="euclidean",
-                 h=12,
-                 msas="recursive",
-                 kmeans = None,
-                 random_state = None,
-                 ):
+    """K-Nearest Neighbours regressor for univariate time series."""
+    def __init__(
+        self,
+        k: int = 3,
+        cf: str = "mean",
+        transform: Optional[str] = None,
+        lags: Union[int, Sequence[int]] = 3,
+        distance: str = "euclidean",
+        h: int = 12,
+        msas: str = "recursive",
+        kmeans: Optional[int] = None,
+        random_state: Optional[int] = None,
+    ):
+        """Create a new :class:`tsknn` instance.
+
+        Parameters
+        ----------
+        k : int
+            Number of nearest neighbours to use.
+        cf : {"mean", "median", "weighted"}
+            Combination function used when aggregating neighbours.
+        transform : {"additive", "multiplicative"}, optional
+            Transformation applied to the windows before computing distances.
+        lags : int or sequence of int
+            Number of lagged observations in each sample window.
+        distance : str
+            Distance metric to use. Only ``"euclidean"`` is implemented.
+        h : int
+            Forecast horizon.
+        msas : {"recursive", "mimo"}
+            Multi-step strategy.
+        kmeans : int, optional
+            Number of clusters used to pre-cluster the windows.
+        random_state : int, optional
+            Random state passed to the ``KMeans`` constructor.
+        """
         self.k = k
         self.cf = cf.lower()
         self.transform = transform.lower() if transform else None
@@ -42,9 +76,12 @@ class tsknn:
         self.random_state = random_state
 
 
-    def fit(self, X):
-        if self.msas == 'mimo' and (self.h + np.max(self.lags) + self.k >= X.shape[0]):
-            raise ValueError('You need a bigger series, or change the mode to recursive')
+    def fit(self, X: np.ndarray):
+        """Fit the model using the provided time series ``X``."""
+
+        if self.msas == "mimo" and (self.h + np.max(self.lags) + self.k >= X.shape[0]):
+            raise ValueError("You need a bigger series, or change the mode to recursive")
+
         self.X = X
 
         self.windowed_arr = sliding_window_view(self.X[:-1], window_shape=(self.lags,), axis=0)
@@ -75,9 +112,7 @@ class tsknn:
 
 
     def _get_k_closest_positions(self, x_pred):
-        '''
-        Return the position of the k nearest neighbors, the first is the closest
-        '''
+        """Return indices of the ``k`` closest windows to ``x_pred``."""
 
         if self.transform == "multiplicative":
             self.x_pred_mean = x_pred.mean()
@@ -97,9 +132,7 @@ class tsknn:
         return index_closests, distances
 
     def _get_k_closest(self, k_closest):
-        '''
-        Return the sequences to the knns
-        '''
+        """Return the ``k`` closest sequences from ``k_closest`` indices."""
         if self.kmeans:
             resultado_final = np.zeros((len(k_closest), self.h_ef))
             for j, cluster in enumerate(k_closest):
@@ -131,9 +164,7 @@ class tsknn:
         return np.take(self.X, k_closest)
 
     def _get_mean(self, k_closest, distances=None):
-        '''
-        Return the mean selected by the user
-        '''
+        """Aggregate neighbours according to ``cf`` setting."""
         if self.cf == "mean":
             return k_closest.mean(axis=0)
         elif self.cf == "median":
@@ -143,9 +174,13 @@ class tsknn:
             return reciprocal_d.dot(k_closest)[0] / reciprocal_d.sum()
         return k_closest.mean()
 
-    def predict(self, X):
+    def predict(self, X: np.ndarray):
+        """Predict the next ``h`` values given the last ``lags`` samples."""
+
         if X.shape[0] != np.max(self.lags):
-            raise ValueError('The biggest lag is different of the  length of example to predict')
+            raise ValueError(
+                "The biggest lag is different of the  length of example to predict"
+            )
         if self.msas == "recursive":
             y_preds = []
             for _ in range(self.h):
