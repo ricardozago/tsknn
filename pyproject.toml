@@ -19,6 +19,7 @@ classifiers = [
 keywords = ["feed", "reader", "tutorial"]
 dependencies = [
     "pandas >= 1.0.0",
+    "statsmodels >= 0.14",
 ]
 requires-python = ">=3.8"
 
