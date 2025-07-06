@@ -33,6 +33,19 @@ def test_weighted_mimo():
 
     idx, dist = model._get_k_closest_positions(X_pred)
     k_close = model._get_k_closest(idx)
-    manual = np.average(k_close, axis=0, weights=1/np.sqrt(dist))
+    manual = np.average(k_close, axis=0, weights=1/np.sqrt(dist + 1e-8))
+
+    assert_almost_equal(preds, manual)
+
+
+def test_weighted_distance_mimo():
+    model = tsknn(cf="weighted", h=12, transform="multiplicative", lags=3,
+                  msas="mimo", k=3, weight_by="distance")
+    model.fit(X)
+    preds = model.predict(X_pred)
+
+    idx, dist = model._get_k_closest_positions(X_pred)
+    k_close = model._get_k_closest(idx)
+    manual = np.average(k_close, axis=0, weights=1/np.sqrt(dist + 1e-8))
 
     assert_almost_equal(preds, manual)

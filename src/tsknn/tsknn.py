@@ -78,6 +78,7 @@ class tsknn:
         kmeans: Optional[int] = None,
         random_state: Optional[int] = None,
         nan_strategy: str = "propagate",
+        weight_by: str = "recency",
     ) -> None:
         """Initialize a ``tsknn`` model.
 
@@ -105,6 +106,10 @@ class tsknn:
             How to treat NaN values in ``X``. ``propagate`` keeps them as-is,
             ``interpolate`` fills missing entries using linear interpolation and
             ``drop`` removes them. Defaults to ``propagate``.
+        weight_by : {"recency", "distance"}, optional
+            Strategy used when ``cf`` is ``"weighted"``. ``"recency"``
+            weights neighbors by how recent they are, while ``"distance"``
+            uses the actual distance value. Defaults to ``"recency"``.
         """
         if isinstance(k, str):
             self.k_strategy = k
@@ -133,6 +138,9 @@ class tsknn:
         self.kmeans = kmeans
         self.random_state = random_state
         self.nan_strategy = nan_strategy.lower()
+        self.weight_by = weight_by.lower()
+        if self.weight_by not in {"recency", "distance"}:
+            raise ValueError("weight_by must be 'recency' or 'distance'")
 
     def _handle_missing(self, x: np.ndarray) -> np.ndarray:
         """Return ``x`` after applying the configured NaN strategy."""
@@ -208,7 +216,10 @@ class tsknn:
             rolled_result = self.func_distance(arr, x_pred)
         k_val = k if k is not None else self.k
         index_closests = np.argpartition(rolled_result, range(k_val))[:k_val]
-        distances = self.X.shape[0] - index_closests
+        if self.weight_by == "distance":
+            distances = rolled_result[index_closests]
+        else:
+            distances = self.X.shape[0] - index_closests
         return index_closests, distances
 
     def _get_k_closest(self, k_closest: np.ndarray, offset: int = 0) -> np.ndarray:
@@ -252,7 +263,8 @@ class tsknn:
         elif self.cf == "median":
             return np.median(k_closest, axis=0)
         elif self.cf == "weighted":
-            reciprocal_d = 1 / np.sqrt(distances)
+            eps = 1e-8
+            reciprocal_d = 1 / np.sqrt(distances + eps)
             return np.average(k_closest, axis=0, weights=reciprocal_d)
         elif self.cf == "trimmed":
             if k_closest.shape[0] <= 2:
