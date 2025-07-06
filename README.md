@@ -44,6 +44,7 @@ model.fit(X)
 previsao = model.predict(X_pred)
 print(previsao)
 ```
+Um script completo pode ser encontrado em `examples/knn_example.py`.
 
 ## Otimização de hiperparâmetros
 
