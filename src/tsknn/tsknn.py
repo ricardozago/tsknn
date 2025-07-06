@@ -1,3 +1,5 @@
+"""Core KNN utilities for time series forecasting."""
+
 from numpy.lib.stride_tricks import sliding_window_view
 import numpy as np
 np.set_printoptions(suppress=True)
@@ -5,23 +7,31 @@ from statsmodels.tsa.stattools import pacf
 
 
 def sum_euclidean(M, v):
+    """Return the squared Euclidean distance between ``v`` and each row of ``M``."""
+
     # https://stackoverflow.com/a/49633639
-    tmp = M-v
-    return np.einsum('ij,ij->i', tmp, tmp)
+    tmp = M - v
+    return np.einsum("ij,ij->i", tmp, tmp)
 
 
 def sum_manhattan(M, v):
+    """Return the Manhattan distance between ``v`` and each row of ``M``."""
+
     tmp = M - v
-    return np.einsum('ij->i', np.abs(tmp))
+    return np.einsum("ij->i", np.abs(tmp))
 
 
 def max_chebyshev(M, v):
+    """Return the Chebyshev distance between ``v`` and each row of ``M``."""
+
     tmp = M - v
     return np.max(np.abs(tmp), axis=1)
 
 
 def cosine_distance(M, v):
-    dot_prod = np.einsum('ij,j->i', M, v)
+    """Return the cosine distance between ``v`` and each row of ``M``."""
+
+    dot_prod = np.einsum("ij,j->i", M, v)
     norm_M = np.linalg.norm(M, axis=1)
     norm_v = np.linalg.norm(v)
     denom = norm_M * norm_v
@@ -30,6 +40,8 @@ def cosine_distance(M, v):
 
 
 def get_distance(distance="euclidean"):
+    """Return a distance function identified by ``distance``."""
+
     if distance == "euclidean":
         return sum_euclidean
     if distance == "manhattan":
@@ -42,24 +54,50 @@ def get_distance(distance="euclidean"):
 
 
 def select_lags_pacf(x, nlags, threshold=0.2):
-    """Return lags with PACF above ``threshold``."""
+    """Return lag indices with partial autocorrelation above ``threshold``."""
+
     pacf_vals = pacf(x, nlags=nlags)
     lags = [i for i, val in enumerate(pacf_vals[1:], start=1) if abs(val) >= threshold]
     return lags if lags else list(range(1, nlags + 1))
 
 
 class tsknn:
-    def __init__(self,
-                 k=3,
-                 cf="mean",
-                 transform=None,  # "additive", "multiplicative"
-                 lags=3,
-                 distance="euclidean",
-                 h=12,
-                 msas="recursive",
-                 kmeans = None,
-                 random_state = None,
-                 ):
+    """K-nearest neighbors forecasting for univariate time series."""
+    def __init__(
+        self,
+        k=3,
+        cf="mean",
+        transform=None,  # "additive", "multiplicative"
+        lags=3,
+        distance="euclidean",
+        h=12,
+        msas="recursive",
+        kmeans=None,
+        random_state=None,
+    ):
+        """Initialize a ``tsknn`` model.
+
+        Parameters
+        ----------
+        k : int or str or iterable, optional
+            Number of neighbors or strategy to determine ``k``. Defaults to 3.
+        cf : {"mean", "median", "weighted", "trimmed"}, optional
+            Aggregation function used to combine neighbors.
+        transform : {"additive", "multiplicative"}, optional
+            Pre-processing transformation applied before computing distances.
+        lags : int or iterable, optional
+            Lag values to use when constructing the feature matrix.
+        distance : {"euclidean", "manhattan", "chebyshev", "cosine"}, optional
+            Distance metric to use. Defaults to Euclidean.
+        h : int, optional
+            Forecast horizon. Defaults to 12.
+        msas : {"recursive", "mimo", "direct"}, optional
+            Multi-step forecasting strategy. Defaults to ``recursive``.
+        kmeans : int, optional
+            Number of clusters to use for centroid-based nearest neighbors.
+        random_state : int, optional
+            Seed for reproducible clustering.
+        """
         if isinstance(k, str):
             self.k_strategy = k
             self.k_list = None
@@ -89,6 +127,7 @@ class tsknn:
 
 
     def fit(self, X):
+        """Fit the model using the provided time series ``X``."""
         if self.k_strategy == "sqrt":
             self.k = max(1, int(np.sqrt(len(X))))
         if self.msas == 'mimo' and (self.h + self.max_lag + (self.k if hasattr(self, 'k') else max(self.k_list)) >= X.shape[0]):
@@ -124,9 +163,7 @@ class tsknn:
 
 
     def _get_k_closest_positions(self, x_pred, k=None, offset=0):
-        '''
-        Return the position of the k nearest neighbors, the first is the closest
-        '''
+        """Return indices of the ``k`` nearest neighbors for ``x_pred``."""
 
         if self.transform == "multiplicative":
             self.x_pred_mean = x_pred.mean()
@@ -148,9 +185,7 @@ class tsknn:
         return index_closests, distances
 
     def _get_k_closest(self, k_closest, offset=0):
-        '''
-        Return the sequences to the knns
-        '''
+        """Return the sequences corresponding to the provided neighbor indices."""
         if self.kmeans:
             resultado_final = np.zeros((len(k_closest), self.h_ef))
             for j, cluster in enumerate(k_closest):
@@ -182,9 +217,7 @@ class tsknn:
         return np.take(self.X, k_closest)
 
     def _get_mean(self, k_closest, distances=None):
-        '''
-        Return the mean selected by the user
-        '''
+        """Aggregate neighbor sequences according to the chosen strategy."""
         if self.cf == "mean":
             return k_closest.mean(axis=0)
         elif self.cf == "median":
@@ -200,6 +233,8 @@ class tsknn:
         return k_closest.mean()
 
     def predict(self, X):
+        """Return forecasts for the next ``h`` steps using context ``X``."""
+
         if X.shape[0] != self.max_lag:
             raise ValueError('The biggest lag is different of the  length of example to predict')
 
