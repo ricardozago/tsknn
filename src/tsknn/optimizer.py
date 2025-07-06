@@ -11,6 +11,28 @@ def rmse(y_true, y_pred):
     return np.sqrt(np.mean((y_true - y_pred) ** 2))
 
 
+def mae(y_true, y_pred):
+    """Mean absolute error."""
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    return np.mean(np.abs(y_true - y_pred))
+
+
+def mape(y_true, y_pred):
+    """Mean absolute percentage error."""
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    y_true = np.where(y_true == 0, np.finfo(float).eps, y_true)
+    return np.mean(np.abs((y_true - y_pred) / y_true))
+
+
+METRICS = {
+    "rmse": rmse,
+    "mae": mae,
+    "mape": mape,
+}
+
+
 def optimize_params(X, param_grid, test_size=12, metric=rmse):
     """Optimize tsknn parameters for a single time series.
 
@@ -23,9 +45,10 @@ def optimize_params(X, param_grid, test_size=12, metric=rmse):
         parameter settings to try.
     test_size : int, optional
         Number of observations at the end of ``X`` to use as validation set.
-    metric : callable, optional
-        Metric function with signature ``metric(y_true, y_pred)``. Defaults to
-        RMSE.
+    metric : str or callable, optional
+        Metric to evaluate predictions. Can be one of ``"rmse"``, ``"mae"`` or
+        ``"mape"`` or a callable with signature ``metric(y_true, y_pred)``.
+        Defaults to RMSE.
 
     Returns
     -------
@@ -33,6 +56,13 @@ def optimize_params(X, param_grid, test_size=12, metric=rmse):
         ``(best_params, best_score)`` with the best parameter combination found
         and the corresponding score.
     """
+
+    if isinstance(metric, str):
+        metric_func = METRICS.get(metric.lower())
+        if metric_func is None:
+            raise ValueError(f"Unknown metric '{metric}'")
+    else:
+        metric_func = metric
 
     X = np.asarray(X)
     best_params = None
@@ -61,7 +91,7 @@ def optimize_params(X, param_grid, test_size=12, metric=rmse):
             # skip invalid parameter combinations
             continue
 
-        score = metric(X[-test_size:], preds[:test_size])
+        score = metric_func(X[-test_size:], preds[:test_size])
         if score < best_score:
             best_score = score
             best_params = params
