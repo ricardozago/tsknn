@@ -9,6 +9,7 @@
 - Modos de previsão MIMO, recursivo e direto (`msas`).
 - Transformações aditivas ou multiplicativas para remoção de tendência.
 - Função `optimize_params` para busca de melhores hiperparâmetros.
+- Validação cruzada com `cross_validate_params` para escolher `k` e `lags`.
 - Suporte a otimização por *grid search*, *random search* ou método bayesiano.
 - Tratamento opcional de valores ausentes com o parâmetro `nan_strategy`.
 
@@ -64,6 +65,15 @@ param_grid = {
 }
 # escolha a métrica entre "rmse", "mae" ou "mape"
 melhores, score = optimize_params(X, param_grid, metric="mae", method="random", n_iter=10)
+print(melhores, score)
+```
+
+Para avaliar as combinações em várias divisões da série utilize `cross_validate_params`:
+
+```python
+from tsknn import cross_validate_params
+
+melhores, score = cross_validate_params(X, param_grid, n_splits=3)
 print(melhores, score)
 ```
 
