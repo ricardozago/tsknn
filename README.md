@@ -12,6 +12,7 @@
 - Validação cruzada com `cross_validate_params` para escolher `k` e `lags`.
 - Suporte a otimização por *grid search*, *random search* ou método bayesiano.
 - Tratamento opcional de valores ausentes com o parâmetro `nan_strategy`.
+- Ponderação dos vizinhos por recência ou pela distância real via `weight_by`.
 
 ## Instalação
 
