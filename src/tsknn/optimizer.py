@@ -97,3 +97,48 @@ def optimize_params(X, param_grid, test_size=12, metric=rmse):
             best_params = params
 
     return best_params, best_score
+
+def autotsknn(X, k_values=None, lags_values=None, test_size=12, metric="rmse", **kwargs):
+    """Find and fit the best tsknn model over ranges of ``k`` and ``lags``.
+
+    Parameters
+    ----------
+    X : array-like
+        Time series values.
+    k_values : iterable of int, optional
+        Values of ``k`` (number of neighbors) to try. Defaults to ``range(1, 6)``.
+    lags_values : iterable of int, optional
+        Values of ``lags`` to try. Defaults to ``range(1, 4)``.
+    test_size : int, optional
+        Number of observations to hold out from the end of ``X`` for validation.
+    metric : str or callable, optional
+        Metric used to evaluate predictions. Same options as ``optimize_params``.
+    **kwargs
+        Additional parameters passed to ``tsknn``.
+
+    Returns
+    -------
+    model : :class:`tsknn.tsknn`
+        Fitted model using the best combination of parameters.
+    best_params : dict
+        Parameter set that achieved the best score.
+    best_score : float
+        Score obtained for ``best_params``.
+    """
+
+    if k_values is None:
+        k_values = range(1, 6)
+    if lags_values is None:
+        lags_values = range(1, 4)
+
+    h = kwargs.pop("h", 12)
+    param_grid = {"k": k_values, "lags": lags_values, "h": [h]}
+    best_params, best_score = optimize_params(X, param_grid, test_size=test_size, metric=metric)
+
+    if best_params is None:
+        raise ValueError("No valid parameter combination found")
+
+    best_params.update(kwargs)
+    model = tsknn(**best_params)
+    model.fit(X)
+    return model, best_params, best_score

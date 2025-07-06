@@ -62,6 +62,19 @@ melhores, score = optimize_params(X, param_grid, metric="mae")
 print(melhores, score)
 ```
 
+## Seleção automática de modelo
+
+Para automatizar a busca e já retornar um modelo treinado utilize `autotsknn`.
+Ele avalia diferentes combinações de `k` e `lags` e devolve o melhor modelo.
+
+```python
+from tsknn import autotsknn
+
+# executa a busca utilizando valores padrao de k e lags
+modelo, params, score = autotsknn(X, h=12)
+print(params, score)
+```
+
 ## Testes
 
 Os testes unitários podem ser executados com `pytest` após instalar as dependências de desenvolvimento:
