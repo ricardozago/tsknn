@@ -15,11 +15,29 @@ def sum_manhattan(M, v):
     return np.einsum('ij->i', np.abs(tmp))
 
 
+def max_chebyshev(M, v):
+    tmp = M - v
+    return np.max(np.abs(tmp), axis=1)
+
+
+def cosine_distance(M, v):
+    dot_prod = np.einsum('ij,j->i', M, v)
+    norm_M = np.linalg.norm(M, axis=1)
+    norm_v = np.linalg.norm(v)
+    denom = norm_M * norm_v
+    denom = np.where(denom == 0, 1e-10, denom)
+    return 1 - dot_prod / denom
+
+
 def get_distance(distance="euclidean"):
     if distance == "euclidean":
         return sum_euclidean
     if distance == "manhattan":
         return sum_manhattan
+    if distance == "chebyshev":
+        return max_chebyshev
+    if distance == "cosine":
+        return cosine_distance
     return sum_euclidean
 
 
