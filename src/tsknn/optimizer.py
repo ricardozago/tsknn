@@ -1,6 +1,10 @@
 import itertools
 from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Tuple
 
+from skopt import gp_minimize
+from skopt.space import Categorical
+from skopt.utils import use_named_args
+
 import pandas as pd
 
 import numpy as np
@@ -69,6 +73,9 @@ def optimize_params(
     param_grid: Dict[str, Iterable[Any]],
     test_size: int = 12,
     metric: Callable[[Sequence[float], Sequence[float]], float] = rmse,
+    method: str = "grid",
+    n_iter: int = 20,
+    random_state: Optional[int] = None,
 ) -> Tuple[Optional[Dict[str, Any]], float]:
     """Optimize tsknn parameters for a single time series.
 
@@ -91,6 +98,12 @@ def optimize_params(
     tuple
         ``(best_params, best_score)`` with the best parameter combination found
         and the corresponding score.
+
+    Notes
+    -----
+    ``method`` can be ``"grid"`` (default), ``"random"`` or ``"bayes"``. When
+    using ``"random"`` or ``"bayes"`` the ``n_iter`` argument controls the number
+    of parameter sets evaluated.
     """
 
     if isinstance(metric, str):
@@ -106,18 +119,23 @@ def optimize_params(
     best_params = None
     best_score = np.inf
 
-    param_names = list(param_grid.keys())
-    param_values = [param_grid[name] for name in param_names]
+    rng = np.random.default_rng(random_state)
 
-    for values in itertools.product(*param_values):
-        params = dict(zip(param_names, values))
+    param_names = list(param_grid.keys())
+    param_values = [list(param_grid[name]) for name in param_names]
+
+    def evaluate(params: Dict[str, Any]) -> float:
+        params = {
+            k: (v.item() if isinstance(v, np.generic) else v)
+            for k, v in params.items()
+        }
         horizon = params.get("h", test_size)
         params["h"] = horizon
         lags = params.get("lags", 1)
         max_lag = max(lags) if hasattr(lags, "__iter__") else lags
 
         if len(X) <= test_size + max_lag:
-            continue
+            return np.inf
 
         train = X[:-test_size]
         X_pred = train[-max_lag:]
@@ -126,10 +144,42 @@ def optimize_params(
             model.fit(train)
             preds = model.predict(X_pred)
         except ValueError:
-            # skip invalid parameter combinations
-            continue
+            return np.inf
 
         score = metric_func(X[-test_size:], preds[:test_size])
+        return score
+
+    search_space = list(itertools.product(*param_values))
+
+    if method == "random":
+        rng.shuffle(search_space)
+        search_space = search_space[:n_iter]
+    elif method == "bayes":
+        if not hasattr(np, "int"):
+            np.int = int  # type: ignore[attr-defined]
+        space = [Categorical(values, name=name) for name, values in zip(param_names, param_values)]
+
+        @use_named_args(space)
+        def objective(**params):
+            return evaluate(params)
+
+        res = gp_minimize(
+            objective,
+            space,
+            n_calls=n_iter,
+            n_initial_points=min(n_iter, 10),
+            random_state=random_state,
+        )
+        best_score = float(res.fun)
+        best_params = {
+            name: (val.item() if isinstance(val, np.generic) else val)
+            for name, val in zip(param_names, res.x)
+        }
+        return best_params, best_score
+
+    for values in search_space:
+        params = dict(zip(param_names, values))
+        score = evaluate(params)
         if score < best_score:
             best_score = score
             best_params = params
@@ -143,6 +193,9 @@ def autotsknn(
     test_size: Optional[int] = None,
     metric: str | Callable[[Sequence[float], Sequence[float]], float] = "rmse",
     freq: Optional[str] = None,
+    search_method: str = "grid",
+    n_iter: int = 20,
+    random_state: Optional[int] = None,
     **kwargs: Any,
 ) -> Tuple[tsknn, Dict[str, Any], float]:
     """Find and fit the best tsknn model over ranges of ``k`` and ``lags``.
@@ -164,6 +217,12 @@ def autotsknn(
         ``lags`` and ``h`` values when they are not supplied.
     metric : str or callable, optional
         Metric used to evaluate predictions. Same options as ``optimize_params``.
+    search_method : {"grid", "random", "bayes"}, optional
+        Optimization strategy used when searching parameters.
+    n_iter : int, optional
+        Number of parameter sets evaluated for ``random`` or ``bayes`` search.
+    random_state : int, optional
+        Seed used for randomization in ``random`` or ``bayes`` search.
     **kwargs
         Additional parameters passed to ``tsknn``.
 
@@ -201,7 +260,15 @@ def autotsknn(
 
     h = kwargs.pop("h", 12)
     param_grid = {"k": k_values, "lags": lags_values, "h": [h]}
-    best_params, best_score = optimize_params(X_values, param_grid, test_size=test_size, metric=metric)
+    best_params, best_score = optimize_params(
+        X_values,
+        param_grid,
+        test_size=test_size,
+        metric=metric,
+        method=search_method,
+        n_iter=n_iter,
+        random_state=random_state,
+    )
 
     if best_params is None:
         raise ValueError("No valid parameter combination found")

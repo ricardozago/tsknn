@@ -17,3 +17,13 @@ def test_autotsknn_returns_model():
     X_pred = X[-3:]
     preds = model.predict(X_pred)
     assert len(preds) == 2
+
+
+def test_autotsknn_random_method():
+    model, params, score = autotsknn(X, k_values=[1, 2], lags_values=[3], h=2, test_size=2, search_method="random", n_iter=1)
+    assert params["k"] in [1, 2]
+
+
+def test_autotsknn_bayes_method():
+    model, params, score = autotsknn(X, k_values=[1, 2], lags_values=[3], h=2, test_size=2, search_method="bayes", n_iter=2, random_state=0)
+    assert params["k"] in [1, 2]

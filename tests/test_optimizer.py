@@ -24,3 +24,13 @@ def test_metric_string_equals_callable():
 def test_unknown_metric_raises():
     with pytest.raises(ValueError):
         optimize_params(X, param_grid, metric="invalid")
+
+
+def test_random_search_runs():
+    params, score = optimize_params(X, param_grid, test_size=2, method="random", n_iter=1)
+    assert params is not None
+
+
+def test_bayes_search_runs():
+    params, score = optimize_params(X, param_grid, test_size=2, method="bayes", n_iter=2, random_state=0)
+    assert params is not None
