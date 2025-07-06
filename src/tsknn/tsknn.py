@@ -1,12 +1,14 @@
 """Core KNN utilities for time series forecasting."""
 
+from typing import Callable, Iterable, List, Optional, Sequence, Tuple
+
 from numpy.lib.stride_tricks import sliding_window_view
 import numpy as np
 np.set_printoptions(suppress=True)
 from statsmodels.tsa.stattools import pacf
 
 
-def sum_euclidean(M, v):
+def sum_euclidean(M: np.ndarray, v: np.ndarray) -> np.ndarray:
     """Return the squared Euclidean distance between ``v`` and each row of ``M``."""
 
     # https://stackoverflow.com/a/49633639
@@ -14,21 +16,21 @@ def sum_euclidean(M, v):
     return np.einsum("ij,ij->i", tmp, tmp)
 
 
-def sum_manhattan(M, v):
+def sum_manhattan(M: np.ndarray, v: np.ndarray) -> np.ndarray:
     """Return the Manhattan distance between ``v`` and each row of ``M``."""
 
     tmp = M - v
     return np.einsum("ij->i", np.abs(tmp))
 
 
-def max_chebyshev(M, v):
+def max_chebyshev(M: np.ndarray, v: np.ndarray) -> np.ndarray:
     """Return the Chebyshev distance between ``v`` and each row of ``M``."""
 
     tmp = M - v
     return np.max(np.abs(tmp), axis=1)
 
 
-def cosine_distance(M, v):
+def cosine_distance(M: np.ndarray, v: np.ndarray) -> np.ndarray:
     """Return the cosine distance between ``v`` and each row of ``M``."""
 
     dot_prod = np.einsum("ij,j->i", M, v)
@@ -39,7 +41,7 @@ def cosine_distance(M, v):
     return 1 - dot_prod / denom
 
 
-def get_distance(distance="euclidean"):
+def get_distance(distance: str = "euclidean") -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
     """Return a distance function identified by ``distance``."""
 
     if distance == "euclidean":
@@ -53,7 +55,7 @@ def get_distance(distance="euclidean"):
     return sum_euclidean
 
 
-def select_lags_pacf(x, nlags, threshold=0.2):
+def select_lags_pacf(x: Sequence[float], nlags: int, threshold: float = 0.2) -> List[int]:
     """Return lag indices with partial autocorrelation above ``threshold``."""
 
     pacf_vals = pacf(x, nlags=nlags)
@@ -63,18 +65,19 @@ def select_lags_pacf(x, nlags, threshold=0.2):
 
 class tsknn:
     """K-nearest neighbors forecasting for univariate time series."""
+
     def __init__(
         self,
-        k=3,
-        cf="mean",
-        transform=None,  # "additive", "multiplicative"
-        lags=3,
-        distance="euclidean",
-        h=12,
-        msas="recursive",
-        kmeans=None,
-        random_state=None,
-    ):
+        k: int | str | Sequence[int] = 3,
+        cf: str = "mean",
+        transform: Optional[str] = None,  # "additive", "multiplicative"
+        lags: int | Sequence[int] = 3,
+        distance: str = "euclidean",
+        h: int = 12,
+        msas: str = "recursive",
+        kmeans: Optional[int] = None,
+        random_state: Optional[int] = None,
+    ) -> None:
         """Initialize a ``tsknn`` model.
 
         Parameters
@@ -126,7 +129,7 @@ class tsknn:
         self.random_state = random_state
 
 
-    def fit(self, X):
+    def fit(self, X: np.ndarray) -> None:
         """Fit the model using the provided time series ``X``."""
         if self.k_strategy == "sqrt":
             self.k = max(1, int(np.sqrt(len(X))))
@@ -162,7 +165,9 @@ class tsknn:
                 self.kmeans_means = self.kmeans_means - self.x_mean[:, np.newaxis]
 
 
-    def _get_k_closest_positions(self, x_pred, k=None, offset=0):
+    def _get_k_closest_positions(
+        self, x_pred: np.ndarray, k: Optional[int] = None, offset: int = 0
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Return indices of the ``k`` nearest neighbors for ``x_pred``."""
 
         if self.transform == "multiplicative":
@@ -184,7 +189,7 @@ class tsknn:
         distances = self.X.shape[0] - index_closests
         return index_closests, distances
 
-    def _get_k_closest(self, k_closest, offset=0):
+    def _get_k_closest(self, k_closest: np.ndarray, offset: int = 0) -> np.ndarray:
         """Return the sequences corresponding to the provided neighbor indices."""
         if self.kmeans:
             resultado_final = np.zeros((len(k_closest), self.h_ef))
@@ -216,7 +221,9 @@ class tsknn:
 
         return np.take(self.X, k_closest)
 
-    def _get_mean(self, k_closest, distances=None):
+    def _get_mean(
+        self, k_closest: np.ndarray, distances: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         """Aggregate neighbor sequences according to the chosen strategy."""
         if self.cf == "mean":
             return k_closest.mean(axis=0)
@@ -232,7 +239,7 @@ class tsknn:
             return trimmed.mean(axis=0)
         return k_closest.mean()
 
-    def predict(self, X):
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """Return forecasts for the next ``h`` steps using context ``X``."""
 
         if X.shape[0] != self.max_lag:

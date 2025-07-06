@@ -1,5 +1,13 @@
 from .tsknn import tsknn, select_lags_pacf
-from .optimizer import optimize_params, autotsknn, rmse, mae, mape
+from .optimizer import (
+    optimize_params,
+    autotsknn,
+    rmse,
+    mae,
+    mape,
+    infer_freq,
+    freq_params,
+)
 
 __all__ = [
     "tsknn",
@@ -9,4 +17,6 @@ __all__ = [
     "rmse",
     "mae",
     "mape",
+    "infer_freq",
+    "freq_params",
 ]
