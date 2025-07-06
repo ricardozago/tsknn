@@ -186,6 +186,135 @@ def optimize_params(
 
     return best_params, best_score
 
+
+def cross_validate_params(
+    X: Sequence[float],
+    param_grid: Dict[str, Iterable[Any]],
+    test_size: int = 12,
+    n_splits: int = 3,
+    metric: Callable[[Sequence[float], Sequence[float]], float] = rmse,
+    method: str = "grid",
+    n_iter: int = 20,
+    random_state: Optional[int] = None,
+) -> Tuple[Optional[Dict[str, Any]], float]:
+    """Optimize parameters using rolling origin cross-validation.
+
+    Parameters
+    ----------
+    X : array-like
+        Time series values.
+    param_grid : dict
+        Dictionary where keys are parameter names and values are iterables of
+        parameter settings to try.
+    test_size : int, optional
+        Size of each validation fold.
+    n_splits : int, optional
+        Number of cross-validation folds. Defaults to 3.
+    metric : str or callable, optional
+        Metric to evaluate predictions. Same options as ``optimize_params``.
+    method : {"grid", "random", "bayes"}, optional
+        Search strategy. Same options as ``optimize_params``.
+    n_iter : int, optional
+        Number of parameter sets evaluated for ``random`` or ``bayes`` search.
+    random_state : int, optional
+        Seed for randomization in ``random`` or ``bayes`` search.
+
+    Returns
+    -------
+    tuple
+        ``(best_params, best_score)`` with the best parameter combination found
+        and the mean score across folds.
+    """
+
+    if isinstance(metric, str):
+        metric_func = METRICS.get(metric.lower())
+        if metric_func is None:
+            raise ValueError(f"Unknown metric '{metric}'")
+    else:
+        metric_func = metric
+
+    if isinstance(X, (pd.Series, pd.DataFrame)):
+        X = X.values.squeeze()
+    X = np.asarray(X)
+
+    rng = np.random.default_rng(random_state)
+
+    param_names = list(param_grid.keys())
+    param_values = [list(param_grid[name]) for name in param_names]
+
+    def evaluate(params: Dict[str, Any]) -> float:
+        params = {
+            k: (v.item() if isinstance(v, np.generic) else v)
+            for k, v in params.items()
+        }
+        horizon = params.get("h", test_size)
+        params["h"] = horizon
+        lags = params.get("lags", 1)
+        max_lag = max(lags) if hasattr(lags, "__iter__") else lags
+
+        required_len = n_splits * test_size + max_lag
+        if len(X) <= required_len:
+            return np.inf
+
+        scores = []
+        for split in range(n_splits):
+            train_end = len(X) - (n_splits - split) * test_size
+            train = X[:train_end]
+            test = X[train_end : train_end + test_size]
+            if len(train) <= max_lag:
+                return np.inf
+            model = tsknn(**params)
+            try:
+                model.fit(train)
+                preds = model.predict(train[-max_lag:])
+            except ValueError:
+                return np.inf
+
+            fold_score = metric_func(test[:horizon], preds[:horizon])
+            scores.append(fold_score)
+
+        return float(np.mean(scores))
+
+    search_space = list(itertools.product(*param_values))
+
+    best_params = None
+    best_score = np.inf
+
+    if method == "random":
+        rng.shuffle(search_space)
+        search_space = search_space[:n_iter]
+    elif method == "bayes":
+        if not hasattr(np, "int"):
+            np.int = int  # type: ignore[attr-defined]
+        space = [Categorical(values, name=name) for name, values in zip(param_names, param_values)]
+
+        @use_named_args(space)
+        def objective(**params: Any) -> float:
+            return evaluate(params)
+
+        res = gp_minimize(
+            objective,
+            space,
+            n_calls=n_iter,
+            n_initial_points=min(n_iter, 10),
+            random_state=random_state,
+        )
+        best_score = float(res.fun)
+        best_params = {
+            name: (val.item() if isinstance(val, np.generic) else val)
+            for name, val in zip(param_names, res.x)
+        }
+        return best_params, best_score
+
+    for values in search_space:
+        params = dict(zip(param_names, values))
+        score = evaluate(params)
+        if score < best_score:
+            best_score = score
+            best_params = params
+
+    return best_params, best_score
+
 def autotsknn(
     X: Sequence[float] | pd.Series,
     k_values: Optional[Iterable[int]] = None,
