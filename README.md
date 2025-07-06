@@ -9,6 +9,7 @@
 - Modos de previsão MIMO, recursivo e direto (`msas`).
 - Transformações aditivas ou multiplicativas para remoção de tendência.
 - Função `optimize_params` para busca de melhores hiperparâmetros.
+- Suporte a otimização por *grid search*, *random search* ou método bayesiano.
 - Tratamento opcional de valores ausentes com o parâmetro `nan_strategy`.
 
 ## Instalação
@@ -51,6 +52,7 @@ Um script completo pode ser encontrado em `examples/knn_example.py`.
 ## Otimização de hiperparâmetros
 
 Utilize `optimize_params` para encontrar a melhor combinação de parâmetros. Informe um `param_grid` com os valores a serem testados e uma série de validação. É possível escolher a métrica passando `metric` como nome ou função.
+Também é possível definir o método de busca com o argumento `method`.
 
 ```python
 from tsknn import optimize_params
@@ -61,7 +63,7 @@ param_grid = {
     "h": [12]
 }
 # escolha a métrica entre "rmse", "mae" ou "mape"
-melhores, score = optimize_params(X, param_grid, metric="mae")
+melhores, score = optimize_params(X, param_grid, metric="mae", method="random", n_iter=10)
 print(melhores, score)
 ```
 
@@ -74,7 +76,7 @@ Ele avalia diferentes combinações de `k` e `lags` e devolve o melhor modelo.
 from tsknn import autotsknn
 
 # executa a busca utilizando valores padrao de k e lags
-modelo, params, score = autotsknn(X, h=12)
+modelo, params, score = autotsknn(X, h=12, search_method="bayes", n_iter=15)
 print(params, score)
 ```
 
