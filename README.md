@@ -80,6 +80,23 @@ modelo, params, score = autotsknn(X, h=12, search_method="bayes", n_iter=15)
 print(params, score)
 ```
 
+## Exemplos adicionais
+
+Na pasta `examples/` há scripts completos demonstrando diferentes fluxos de uso
+da biblioteca:
+
+- `knn_example.py` – execução direta do `tsknn` com previsão de 5 valores.
+- `optimize_params_example.py` – uso da função `optimize_params` para buscar os
+  melhores hiperparâmetros.
+- `autotsknn_example.py` – seleção automática de `k` e `lags` com otimização
+  bayesiana.
+
+Execute os scripts com Python para ver os resultados em ação, por exemplo:
+
+```bash
+python examples/optimize_params_example.py
+```
+
 ## Testes
 
 Os testes unitários podem ser executados com `pytest` após instalar as dependências de desenvolvimento:
