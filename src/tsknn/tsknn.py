@@ -1,6 +1,7 @@
 from numpy.lib.stride_tricks import sliding_window_view
 import numpy as np
 np.set_printoptions(suppress=True)
+from statsmodels.tsa.stattools import pacf
 
 
 def sum_euclidean(M, v):
@@ -9,10 +10,24 @@ def sum_euclidean(M, v):
     return np.einsum('ij,ij->i', tmp, tmp)
 
 
+def sum_manhattan(M, v):
+    tmp = M - v
+    return np.einsum('ij->i', np.abs(tmp))
+
+
 def get_distance(distance="euclidean"):
     if distance == "euclidean":
         return sum_euclidean
+    if distance == "manhattan":
+        return sum_manhattan
     return sum_euclidean
+
+
+def select_lags_pacf(x, nlags, threshold=0.2):
+    """Return lags with PACF above ``threshold``."""
+    pacf_vals = pacf(x, nlags=nlags)
+    lags = [i for i, val in enumerate(pacf_vals[1:], start=1) if abs(val) >= threshold]
+    return lags if lags else list(range(1, nlags + 1))
 
 
 class tsknn:
@@ -27,10 +42,23 @@ class tsknn:
                  kmeans = None,
                  random_state = None,
                  ):
-        self.k = k
+        if isinstance(k, str):
+            self.k_strategy = k
+            self.k_list = None
+        elif isinstance(k, (list, tuple)):
+            self.k_strategy = "combine"
+            self.k_list = list(k)
+        else:
+            self.k_strategy = "single"
+            self.k = int(k)
+            self.k_list = None
         self.cf = cf.lower()
         self.transform = transform.lower() if transform else None
-        self.lags = lags
+        if isinstance(lags, int):
+            self.lags = np.arange(1, lags + 1)
+        else:
+            self.lags = np.array(list(lags))
+        self.max_lag = int(np.max(self.lags))
         self.func_distance = get_distance(distance)
         self.h = h
         self.msas = msas.lower()
@@ -43,11 +71,14 @@ class tsknn:
 
 
     def fit(self, X):
-        if self.msas == 'mimo' and (self.h + np.max(self.lags) + self.k >= X.shape[0]):
+        if self.k_strategy == "sqrt":
+            self.k = max(1, int(np.sqrt(len(X))))
+        if self.msas == 'mimo' and (self.h + self.max_lag + (self.k if hasattr(self, 'k') else max(self.k_list)) >= X.shape[0]):
             raise ValueError('You need a bigger series, or change the mode to recursive')
         self.X = X
 
-        self.windowed_arr = sliding_window_view(self.X[:-1], window_shape=(self.lags,), axis=0)
+        self.windowed_arr = sliding_window_view(self.X[:-1], window_shape=(self.max_lag,), axis=0)
+        self.windowed_arr = self.windowed_arr[:, self.max_lag - self.lags[::-1]]
 
         if self.transform == "multiplicative" and not self.kmeans:
             self.x_mean = self.windowed_arr.mean(axis=1)
@@ -74,7 +105,7 @@ class tsknn:
                 self.kmeans_means = self.kmeans_means - self.x_mean[:, np.newaxis]
 
 
-    def _get_k_closest_positions(self, x_pred):
+    def _get_k_closest_positions(self, x_pred, k=None, offset=0):
         '''
         Return the position of the k nearest neighbors, the first is the closest
         '''
@@ -91,12 +122,14 @@ class tsknn:
         if self.kmeans:
             rolled_result = self.func_distance(self.kmeans_means, x_pred)
         else:
-            rolled_result = self.func_distance(self.windowed_arr, x_pred)
-        index_closests = np.argpartition(rolled_result, range(self.k))[:self.k]
+            arr = self.windowed_arr[:len(self.windowed_arr)-offset] if offset else self.windowed_arr
+            rolled_result = self.func_distance(arr, x_pred)
+        k_val = k if k is not None else self.k
+        index_closests = np.argpartition(rolled_result, range(k_val))[:k_val]
         distances = self.X.shape[0] - index_closests
         return index_closests, distances
 
-    def _get_k_closest(self, k_closest):
+    def _get_k_closest(self, k_closest, offset=0):
         '''
         Return the sequences to the knns
         '''
@@ -119,14 +152,14 @@ class tsknn:
 
             return resultado_final
 
-        k_closest = k_closest[:, np.newaxis] + np.tile(np.arange(self.h_ef), (len(k_closest), 1)) + self.lags
+        k_closest = k_closest[:, np.newaxis] + np.tile(np.arange(self.h_ef), (len(k_closest), 1)) + self.max_lag + offset
 
         if self.transform == "multiplicative":
-            X = self.X[self.lags:]
-            return (np.take(X, k_closest - self.lags) / (self.x_mean[k_closest[:, 0] - self.lags, np.newaxis])) * self.x_pred_mean
+            X = self.X[self.max_lag:]
+            return (np.take(X, k_closest - self.max_lag) / (self.x_mean[k_closest[:, 0] - self.max_lag, np.newaxis])) * self.x_pred_mean
         elif self.transform == "additive":
-            X = self.X[self.lags:]
-            return (np.take(X, k_closest - self.lags) - (self.x_mean[k_closest[:, 0] - self.lags, np.newaxis])) + self.x_pred_mean
+            X = self.X[self.max_lag:]
+            return (np.take(X, k_closest - self.max_lag) - (self.x_mean[k_closest[:, 0] - self.max_lag, np.newaxis])) + self.x_pred_mean
 
         return np.take(self.X, k_closest)
 
@@ -141,22 +174,44 @@ class tsknn:
         elif self.cf == "weighted":  # to do, fix para o caso mimo
             reciprocal_d = 1 / np.sqrt(distances)
             return reciprocal_d.dot(k_closest)[0] / reciprocal_d.sum()
+        elif self.cf == "trimmed":
+            if k_closest.shape[0] <= 2:
+                return k_closest.mean(axis=0)
+            trimmed = np.sort(k_closest, axis=0)[1:-1]
+            return trimmed.mean(axis=0)
         return k_closest.mean()
 
     def predict(self, X):
-        if X.shape[0] != np.max(self.lags):
+        if X.shape[0] != self.max_lag:
             raise ValueError('The biggest lag is different of the  length of example to predict')
-        if self.msas == "recursive":
-            y_preds = []
-            for _ in range(self.h):
-                index_closests, distances = self._get_k_closest_positions(X)
-                k_closest = self._get_k_closest(index_closests)
-                y_pred = self._get_mean(k_closest, distances)[0]
-                y_preds.append(y_pred)
-                X = np.concatenate((X, np.array([y_pred])), axis=0)[-self.lags:]
-            y_preds = np.array(y_preds)
-        elif self.msas == "mimo":
-            index_closests, distances = self._get_k_closest_positions(X)
-            k_closest = self._get_k_closest(index_closests)
-            y_preds = self._get_mean(k_closest, distances)
-        return y_preds
+
+        def _predict_internal(k_val):
+            if self.msas == "recursive":
+                y_preds = []
+                x_curr = X.copy()
+                for _ in range(self.h):
+                    idx, dist = self._get_k_closest_positions(x_curr, k=k_val)
+                    k_close = self._get_k_closest(idx)
+                    y_pred = self._get_mean(k_close, dist)[0]
+                    y_preds.append(y_pred)
+                    x_curr = np.concatenate((x_curr, np.array([y_pred])), axis=0)[-self.max_lag:]
+                return np.array(y_preds)
+            elif self.msas == "mimo":
+                idx, dist = self._get_k_closest_positions(X, k=k_val)
+                k_close = self._get_k_closest(idx)
+                return self._get_mean(k_close, dist)
+            elif self.msas == "direct":
+                y_preds = []
+                for j in range(1, self.h + 1):
+                    idx, dist = self._get_k_closest_positions(X, k=k_val, offset=j-1)
+                    k_close = self._get_k_closest(idx, offset=j-1)
+                    y_pred = self._get_mean(k_close, dist)[0]
+                    y_preds.append(y_pred)
+                return np.array(y_preds)
+
+        if self.k_strategy == "combine":
+            results = [_predict_internal(kv) for kv in self.k_list]
+            return np.mean(results, axis=0)
+        else:
+            k_val = self.k if hasattr(self, "k") else max(self.k_list)
+            return _predict_internal(k_val)
