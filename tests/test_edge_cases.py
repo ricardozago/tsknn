@@ -16,3 +16,11 @@ def test_nan_values_propagate():
     model.fit(X)
     pred = model.predict(X[-2:])
     assert np.isnan(pred).any()
+
+
+def test_nan_strategy_interpolate():
+    X = np.array([1.0, 2.0, np.nan, 4.0, 5.0, 6.0])
+    model = tsknn(lags=2, h=1, nan_strategy="interpolate")
+    model.fit(X)
+    pred = model.predict(X[-2:])
+    assert not np.isnan(pred).any()

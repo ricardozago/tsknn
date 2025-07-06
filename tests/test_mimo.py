@@ -24,3 +24,15 @@ def test_answer():
                      500.28989803, 525.41630756, 506.41834013, 478.21661893, 475.52638617,
                      454.32574339, 484.28273386])
     assert_almost_equal(x_pred, resp, decimal=5)
+
+
+def test_weighted_mimo():
+    model = tsknn(cf="weighted", h=12, transform="multiplicative", lags=3, msas="mimo", k=3)
+    model.fit(X)
+    preds = model.predict(X_pred)
+
+    idx, dist = model._get_k_closest_positions(X_pred)
+    k_close = model._get_k_closest(idx)
+    manual = np.average(k_close, axis=0, weights=1/np.sqrt(dist))
+
+    assert_almost_equal(preds, manual)

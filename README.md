@@ -9,6 +9,7 @@
 - Modos de previsão MIMO, recursivo e direto (`msas`).
 - Transformações aditivas ou multiplicativas para remoção de tendência.
 - Função `optimize_params` para busca de melhores hiperparâmetros.
+- Tratamento opcional de valores ausentes com o parâmetro `nan_strategy`.
 
 ## Instalação
 
@@ -39,7 +40,8 @@ X = df["passengers"].values
 
 lags = 3
 X_pred = X[-lags:]
-model = tsknn(k=3, h=12, transform="multiplicative", lags=lags)
+model = tsknn(k=3, h=12, transform="multiplicative", lags=lags,
+              nan_strategy="interpolate")
 model.fit(X)
 previsao = model.predict(X_pred)
 print(previsao)

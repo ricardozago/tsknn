@@ -77,6 +77,7 @@ class tsknn:
         msas: str = "recursive",
         kmeans: Optional[int] = None,
         random_state: Optional[int] = None,
+        nan_strategy: str = "propagate",
     ) -> None:
         """Initialize a ``tsknn`` model.
 
@@ -100,6 +101,10 @@ class tsknn:
             Number of clusters to use for centroid-based nearest neighbors.
         random_state : int, optional
             Seed for reproducible clustering.
+        nan_strategy : {"propagate", "interpolate", "drop"}, optional
+            How to treat NaN values in ``X``. ``propagate`` keeps them as-is,
+            ``interpolate`` fills missing entries using linear interpolation and
+            ``drop`` removes them. Defaults to ``propagate``.
         """
         if isinstance(k, str):
             self.k_strategy = k
@@ -127,6 +132,22 @@ class tsknn:
             self.h_ef = h
         self.kmeans = kmeans
         self.random_state = random_state
+        self.nan_strategy = nan_strategy.lower()
+
+    def _handle_missing(self, x: np.ndarray) -> np.ndarray:
+        """Return ``x`` after applying the configured NaN strategy."""
+        if self.nan_strategy == "propagate":
+            return x
+        if self.nan_strategy == "drop":
+            return x[~np.isnan(x)]
+        if self.nan_strategy == "interpolate":
+            nans = np.isnan(x)
+            if nans.any():
+                not_nans = np.where(~nans)[0]
+                if not_nans.size:
+                    x[nans] = np.interp(np.flatnonzero(nans), not_nans, x[not_nans])
+            return x
+        raise ValueError("Unknown nan_strategy")
 
 
     def fit(self, X: np.ndarray) -> None:
@@ -135,7 +156,8 @@ class tsknn:
             self.k = max(1, int(np.sqrt(len(X))))
         if self.msas == 'mimo' and (self.h + self.max_lag + (self.k if hasattr(self, 'k') else max(self.k_list)) >= X.shape[0]):
             raise ValueError('You need a bigger series, or change the mode to recursive')
-        self.X = X
+        X = np.asarray(X, dtype=float)
+        self.X = self._handle_missing(X)
 
         self.windowed_arr = sliding_window_view(self.X[:-1], window_shape=(self.max_lag,), axis=0)
         self.windowed_arr = self.windowed_arr[:, self.max_lag - self.lags[::-1]]
@@ -229,9 +251,9 @@ class tsknn:
             return k_closest.mean(axis=0)
         elif self.cf == "median":
             return np.median(k_closest, axis=0)
-        elif self.cf == "weighted":  # to do, fix para o caso mimo
+        elif self.cf == "weighted":
             reciprocal_d = 1 / np.sqrt(distances)
-            return reciprocal_d.dot(k_closest)[0] / reciprocal_d.sum()
+            return np.average(k_closest, axis=0, weights=reciprocal_d)
         elif self.cf == "trimmed":
             if k_closest.shape[0] <= 2:
                 return k_closest.mean(axis=0)
