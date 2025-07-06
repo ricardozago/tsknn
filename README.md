@@ -47,7 +47,7 @@ print(previsao)
 
 ## Otimização de hiperparâmetros
 
-Utilize `optimize_params` para encontrar a melhor combinação de parâmetros. Informe um `param_grid` com os valores a serem testados e uma série de validação.
+Utilize `optimize_params` para encontrar a melhor combinação de parâmetros. Informe um `param_grid` com os valores a serem testados e uma série de validação. É possível escolher a métrica passando `metric` como nome ou função.
 
 ```python
 from tsknn import optimize_params
@@ -57,7 +57,8 @@ param_grid = {
     "lags": [3, 5],
     "h": [12]
 }
-melhores, score = optimize_params(X, param_grid)
+# escolha a métrica entre "rmse", "mae" ou "mape"
+melhores, score = optimize_params(X, param_grid, metric="mae")
 print(melhores, score)
 ```
 
