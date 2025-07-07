@@ -98,7 +98,8 @@ It evaluates different combinations of `k` and `lags` and returns the best model
 from tsknn import autotsknn
 
 # runs the search using default values for k and lags
-model, params, score = autotsknn(X, h=12, search_method="bayes", n_iter=15)
+# Bayesian optimisation is used by default
+model, params, score = autotsknn(X, h=12, n_iter=15, random_state=0)
 print(params, score)
 ```
 
@@ -108,6 +109,8 @@ The `examples/` folder contains complete scripts demonstrating different usage f
 - `knn_example.py` – direct execution of `tsknn` forecasting 5 values.
 - `optimize_params_example.py` – usage of `optimize_params` to search for the best hyperparameters.
 - `autotsknn_example.py` – automatic selection of `k` and `lags` with Bayesian optimisation.
+- `custom_metric_example.py` – performing parameter search with a user defined metric.
+- `sklearn_pipeline_example.py` – integration of `tsknn` inside a scikit-learn pipeline.
 
 Run the scripts with Python to see the results in action, for example:
 

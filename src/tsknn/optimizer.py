@@ -358,7 +358,7 @@ def autotsknn(
     test_size: Optional[int] = None,
     metric: str | Callable[[Sequence[float], Sequence[float]], float] = "rmse",
     freq: Optional[str] = None,
-    search_method: str = "grid",
+    search_method: str = "bayes",
     n_iter: int = 20,
     random_state: Optional[int] = None,
     early_stopping_rounds: Optional[int] = None,
@@ -371,9 +371,11 @@ def autotsknn(
     X : array-like
         Time series values.
     k_values : iterable of int, optional
-        Values of ``k`` (number of neighbors) to try. Defaults to ``range(1, 6)``.
+        Values of ``k`` (number of neighbors) to try. If not provided a range
+        from 1 up to ``sqrt(len(X))`` is used.
     lags_values : iterable of int, optional
-        Values of ``lags`` to try. Defaults to ``range(1, 4)``.
+        Values of ``lags`` to try. When ``freq`` is given and ``lags_values`` is
+        ``None`` a search range ``range(1, freq_default + 1)`` is tested.
     test_size : int, optional
         Number of observations to hold out from the end of ``X`` for validation.
         If ``freq`` is provided and ``test_size`` is ``None``, a default value
@@ -413,13 +415,14 @@ def autotsknn(
 
     if freq and lags_values is None:
         l_default, h_default = freq_params(freq)
-        lags_values = [l_default]
+        lags_values = range(1, l_default + 1)
         kwargs.setdefault("h", h_default)
         if test_size is None:
             test_size = h_default
 
     if k_values is None:
-        k_values = range(1, 6)
+        k_max = min(10, int(np.sqrt(len(X_values))) + 1)
+        k_values = range(1, k_max)
     if lags_values is None:
         lags_values = range(1, 4)
 

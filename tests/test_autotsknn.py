@@ -46,3 +46,11 @@ def test_autotsknn_bayes_method():
         random_state=0,
     )
     assert params["k"] in [1, 2]
+
+
+def test_autotsknn_defaults():
+    model, params, score = autotsknn(X, h=2, test_size=2, random_state=0)
+    assert 1 <= params["k"] < 10
+    assert 1 <= params["lags"] <= 3
+    preds = model.predict(X[-params["lags"]:])
+    assert len(preds) == 2
