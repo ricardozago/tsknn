@@ -1,6 +1,6 @@
 import pandas as pd
-from tsknn import autotsknn
 
+from tsknn import autotsknn
 
 df = pd.read_csv("data/AirPassengers.csv")
 df["Month"] = pd.to_datetime(df["Month"])
@@ -11,7 +11,9 @@ X = df["passengers"].values
 
 
 def test_autotsknn_returns_model():
-    model, params, score = autotsknn(X, k_values=[1, 2], lags_values=[3], h=2, test_size=2, metric="mae")
+    model, params, score = autotsknn(
+        X, k_values=[1, 2], lags_values=[3], h=2, test_size=2, metric="mae"
+    )
     assert params["k"] in [1, 2]
     assert params["lags"] == 3
     X_pred = X[-3:]
@@ -20,10 +22,27 @@ def test_autotsknn_returns_model():
 
 
 def test_autotsknn_random_method():
-    model, params, score = autotsknn(X, k_values=[1, 2], lags_values=[3], h=2, test_size=2, search_method="random", n_iter=1)
+    model, params, score = autotsknn(
+        X,
+        k_values=[1, 2],
+        lags_values=[3],
+        h=2,
+        test_size=2,
+        search_method="random",
+        n_iter=1,
+    )
     assert params["k"] in [1, 2]
 
 
 def test_autotsknn_bayes_method():
-    model, params, score = autotsknn(X, k_values=[1, 2], lags_values=[3], h=2, test_size=2, search_method="bayes", n_iter=2, random_state=0)
+    model, params, score = autotsknn(
+        X,
+        k_values=[1, 2],
+        lags_values=[3],
+        h=2,
+        test_size=2,
+        search_method="bayes",
+        n_iter=2,
+        random_state=0,
+    )
     assert params["k"] in [1, 2]

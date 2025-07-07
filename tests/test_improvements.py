@@ -1,13 +1,13 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 from numpy.testing import assert_almost_equal
-from tsknn import tsknn, select_lags_pacf
 
+from tsknn import select_lags_pacf, tsknn
 
 df = pd.read_csv("data/AirPassengers.csv")
 df["Month"] = pd.to_datetime(df["Month"])
 df.set_index("Month", inplace=True)
-df = df.asfreq('MS')
+df = df.asfreq("MS")
 df.columns = ["passengers"]
 
 df = df[-24:]

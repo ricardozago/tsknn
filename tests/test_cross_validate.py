@@ -1,6 +1,6 @@
 import pandas as pd
-from tsknn import cross_validate_params, optimize_params
 
+from tsknn import cross_validate_params, optimize_params
 
 df = pd.read_csv("data/AirPassengers.csv")
 df["Month"] = pd.to_datetime(df["Month"])

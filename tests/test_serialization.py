@@ -1,5 +1,6 @@
 import numpy as np
-from tsknn import tsknn, mtsknn
+
+from tsknn import mtsknn, tsknn
 
 
 def test_save_load_tsknn(tmp_path):

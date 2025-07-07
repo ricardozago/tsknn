@@ -1,13 +1,11 @@
 import itertools
 from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Tuple
 
+import numpy as np
+import pandas as pd
 from skopt import gp_minimize
 from skopt.space import Categorical
 from skopt.utils import use_named_args
-
-import pandas as pd
-
-import numpy as np
 
 from .tsknn import tsknn
 
@@ -126,8 +124,7 @@ def optimize_params(
 
     def evaluate(params: Dict[str, Any]) -> float:
         params = {
-            k: (v.item() if isinstance(v, np.generic) else v)
-            for k, v in params.items()
+            k: (v.item() if isinstance(v, np.generic) else v) for k, v in params.items()
         }
         horizon = params.get("h", test_size)
         params["h"] = horizon
@@ -157,7 +154,10 @@ def optimize_params(
     elif method == "bayes":
         if not hasattr(np, "int"):
             np.int = int  # type: ignore[attr-defined]
-        space = [Categorical(values, name=name) for name, values in zip(param_names, param_values)]
+        space = [
+            Categorical(values, name=name)
+            for name, values in zip(param_names, param_values)
+        ]
 
         @use_named_args(space)
         def objective(**params):
@@ -244,8 +244,7 @@ def cross_validate_params(
 
     def evaluate(params: Dict[str, Any]) -> float:
         params = {
-            k: (v.item() if isinstance(v, np.generic) else v)
-            for k, v in params.items()
+            k: (v.item() if isinstance(v, np.generic) else v) for k, v in params.items()
         }
         horizon = params.get("h", test_size)
         params["h"] = horizon
@@ -286,7 +285,10 @@ def cross_validate_params(
     elif method == "bayes":
         if not hasattr(np, "int"):
             np.int = int  # type: ignore[attr-defined]
-        space = [Categorical(values, name=name) for name, values in zip(param_names, param_values)]
+        space = [
+            Categorical(values, name=name)
+            for name, values in zip(param_names, param_values)
+        ]
 
         @use_named_args(space)
         def objective(**params: Any) -> float:
@@ -314,6 +316,7 @@ def cross_validate_params(
             best_params = params
 
     return best_params, best_score
+
 
 def autotsknn(
     X: Sequence[float] | pd.Series,
