@@ -1,6 +1,6 @@
 import pandas as pd
-from tsknn import autotsknn
 
+from tsknn import autotsknn
 
 df = pd.read_csv("data/AirPassengers.csv")
 df["Month"] = pd.to_datetime(df["Month"])

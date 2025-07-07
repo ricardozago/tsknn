@@ -1,7 +1,7 @@
 import pandas as pd
 from sklearn.pipeline import Pipeline
-from tsknn import tsknn
 
+from tsknn import tsknn
 
 df = pd.read_csv("data/AirPassengers.csv")
 df["Month"] = pd.to_datetime(df["Month"])

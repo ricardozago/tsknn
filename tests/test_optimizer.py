@@ -1,8 +1,7 @@
 import pandas as pd
 import pytest
 
-from tsknn import optimize_params, mae
-
+from tsknn import mae, optimize_params
 
 df = pd.read_csv("data/AirPassengers.csv")
 df["Month"] = pd.to_datetime(df["Month"])
@@ -27,10 +26,14 @@ def test_unknown_metric_raises():
 
 
 def test_random_search_runs():
-    params, score = optimize_params(X, param_grid, test_size=2, method="random", n_iter=1)
+    params, score = optimize_params(
+        X, param_grid, test_size=2, method="random", n_iter=1
+    )
     assert params is not None
 
 
 def test_bayes_search_runs():
-    params, score = optimize_params(X, param_grid, test_size=2, method="bayes", n_iter=2, random_state=0)
+    params, score = optimize_params(
+        X, param_grid, test_size=2, method="bayes", n_iter=2, random_state=0
+    )
     assert params is not None

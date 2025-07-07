@@ -1,11 +1,11 @@
 """Core KNN utilities for time series forecasting."""
 
+from dataclasses import dataclass
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 
-from sklearn.base import BaseEstimator, RegressorMixin
-
-from numpy.lib.stride_tricks import sliding_window_view
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
+from sklearn.base import BaseEstimator, RegressorMixin
 
 np.set_printoptions(suppress=True)
 from statsmodels.tsa.stattools import pacf
@@ -70,6 +70,23 @@ def select_lags_pacf(
     return lags if lags else list(range(1, nlags + 1))
 
 
+@dataclass
+class TSKNNConfig:
+    """Configuration options for :class:`tsknn`."""
+
+    k: int | str | Sequence[int] = 3
+    cf: str = "mean"
+    transform: Optional[str] = None
+    lags: int | Sequence[int] = 3
+    distance: str = "euclidean"
+    h: int = 12
+    msas: str = "recursive"
+    kmeans: Optional[int] = None
+    random_state: Optional[int] = None
+    nan_strategy: str = "propagate"
+    weight_by: str = "recency"
+
+
 class tsknn(BaseEstimator, RegressorMixin):
     """K-nearest neighbors forecasting for univariate time series."""
 
@@ -118,36 +135,62 @@ class tsknn(BaseEstimator, RegressorMixin):
             weights neighbors by how recent they are, while ``"distance"``
             uses the actual distance value. Defaults to ``"recency"``.
         """
-        if isinstance(k, str):
-            self.k_strategy = k
+        self.config = TSKNNConfig(
+            k=k,
+            cf=cf,
+            transform=transform,
+            lags=lags,
+            distance=distance,
+            h=h,
+            msas=msas,
+            kmeans=kmeans,
+            random_state=random_state,
+            nan_strategy=nan_strategy,
+            weight_by=weight_by,
+        )
+
+        if isinstance(self.config.k, str):
+            self.k_strategy = self.config.k
             self.k_list = None
-        elif isinstance(k, (list, tuple)):
+        elif isinstance(self.config.k, (list, tuple)):
             self.k_strategy = "combine"
-            self.k_list = list(k)
+            self.k_list = list(self.config.k)
         else:
             self.k_strategy = "single"
-            self.k = int(k)
+            self.k = int(self.config.k)
             self.k_list = None
-        self.cf = cf.lower()
-        self.transform = transform.lower() if transform else None
-        if isinstance(lags, int):
-            self.lags = np.arange(1, lags + 1)
+
+        self.cf = self.config.cf.lower()
+        self.transform = (
+            self.config.transform.lower() if self.config.transform else None
+        )
+        if isinstance(self.config.lags, int):
+            self.lags = np.arange(1, self.config.lags + 1)
         else:
-            self.lags = np.array(list(lags))
+            self.lags = np.array(list(self.config.lags))
+
         self.max_lag = int(np.max(self.lags))
-        self.func_distance = get_distance(distance)
-        self.h = h
-        self.msas = msas.lower()
-        if self.msas == "recursive":
-            self.h_ef = 1
-        else:
-            self.h_ef = h
-        self.kmeans = kmeans
-        self.random_state = random_state
-        self.nan_strategy = nan_strategy.lower()
-        self.weight_by = weight_by.lower()
+        self.func_distance = get_distance(self.config.distance)
+        self.h = self.config.h
+        self.msas = self.config.msas.lower()
+        self.h_ef = 1 if self.msas == "recursive" else self.h
+        self.kmeans = self.config.kmeans
+        self.random_state = self.config.random_state
+        self.nan_strategy = self.config.nan_strategy.lower()
+        self.weight_by = self.config.weight_by.lower()
+
+        self._validate_params()
+
+    def _validate_params(self) -> None:
+        """Validate configuration options."""
         if self.weight_by not in {"recency", "distance"}:
             raise ValueError("weight_by must be 'recency' or 'distance'")
+        if self.msas not in {"recursive", "mimo", "direct"}:
+            raise ValueError("msas must be 'recursive', 'mimo' or 'direct'")
+        if self.cf not in {"mean", "median", "weighted", "trimmed"}:
+            raise ValueError("Invalid combination function")
+        if self.nan_strategy not in {"propagate", "interpolate", "drop"}:
+            raise ValueError("Unknown nan_strategy")
 
     def _handle_missing(self, x: np.ndarray) -> np.ndarray:
         """Return ``x`` after applying the configured NaN strategy."""
@@ -218,29 +261,33 @@ class tsknn(BaseEstimator, RegressorMixin):
 
         return self
 
+    def _prepare_pred(self, x_pred: np.ndarray) -> np.ndarray:
+        """Return ``x_pred`` after applying transformation and store its mean."""
+        if self.transform == "multiplicative":
+            self.x_pred_mean = x_pred.mean()
+            return x_pred / self.x_pred_mean
+        if self.transform == "additive":
+            self.x_pred_mean = x_pred.mean()
+            return x_pred - self.x_pred_mean
+        return x_pred
+
+    def _distance_array(self, x_pred: np.ndarray, offset: int) -> np.ndarray:
+        """Compute distances from ``x_pred`` to training windows."""
+        if self.kmeans:
+            return self.func_distance(self.kmeans_means, x_pred)
+        arr = (
+            self.windowed_arr[: len(self.windowed_arr) - offset]
+            if offset
+            else self.windowed_arr
+        )
+        return self.func_distance(arr, x_pred)
+
     def _get_k_closest_positions(
         self, x_pred: np.ndarray, k: Optional[int] = None, offset: int = 0
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Return indices of the ``k`` nearest neighbors for ``x_pred``."""
-
-        if self.transform == "multiplicative":
-            self.x_pred_mean = x_pred.mean()
-            x_pred = x_pred / self.x_pred_mean
-        elif self.transform == "additive":
-            self.x_pred_mean = x_pred.mean()
-            x_pred = x_pred - self.x_pred_mean
-
-        # rolled_result = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=self.windowed_arr)
-        # rolled_result = np.sum((self.windowed_arr - x_pred)**2, axis=-1)
-        if self.kmeans:
-            rolled_result = self.func_distance(self.kmeans_means, x_pred)
-        else:
-            arr = (
-                self.windowed_arr[: len(self.windowed_arr) - offset]
-                if offset
-                else self.windowed_arr
-            )
-            rolled_result = self.func_distance(arr, x_pred)
+        x_pred = self._prepare_pred(x_pred)
+        rolled_result = self._distance_array(x_pred, offset)
         k_val = k if k is not None else self.k
         index_closests = np.argpartition(rolled_result, range(k_val))[:k_val]
         if self.weight_by == "distance":
@@ -291,7 +338,7 @@ class tsknn(BaseEstimator, RegressorMixin):
                 np.take(X, k_closest - self.max_lag)
                 / (self.x_mean[k_closest[:, 0] - self.max_lag, np.newaxis])
             ) * self.x_pred_mean
-        elif self.transform == "additive":
+        if self.transform == "additive":
             X = self.X[self.max_lag :]
             return (
                 np.take(X, k_closest - self.max_lag)
