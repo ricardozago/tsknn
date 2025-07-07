@@ -128,6 +128,20 @@ loaded = tsknn.load("model.pkl")
 preds = loaded.predict(X[-3:])
 ```
 
+## scikit-learn compatibility
+
+`tsknn` implements the `BaseEstimator` and `RegressorMixin` APIs so it can be
+used in scikit-learn pipelines:
+
+```python
+from sklearn.pipeline import Pipeline
+from tsknn import tsknn
+
+pipeline = Pipeline([("model", tsknn(lags=3, h=2))])
+pipeline.fit(X)
+preds = pipeline.predict(X[-3:])
+```
+
 ## Tests
 Unit tests can be run with `pytest` after installing the development dependencies:
 
