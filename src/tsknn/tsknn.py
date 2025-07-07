@@ -92,9 +92,35 @@ def select_lags_pacf(
     return lags if lags else list(range(1, nlags + 1))
 
 
-@dataclass
+@dataclass(frozen=True)
 class TSKNNConfig:
-    """Configuration options for :class:`tsknn`."""
+    """Configuration options for :class:`tsknn`.
+
+    Parameters
+    ----------
+    k : int | str | Sequence[int], default=3
+        Number of neighbors or strategy name.
+    cf : str, default="mean"
+        Combination function: "mean", "median", "weighted" or "trimmed".
+    transform : str or None, default=None
+        Optional pre-processing transformation ("additive" or "multiplicative").
+    lags : int | Sequence[int], default=3
+        Lag values used to build the feature matrix.
+    distance : str, default="euclidean"
+        Distance metric name.
+    h : int, default=12
+        Forecast horizon.
+    msas : str, default="recursive"
+        Multi-step forecasting strategy.
+    kmeans : int or None, default=None
+        Number of clusters for centroid based approach.
+    random_state : int or None, default=None
+        Seed used for any random operations.
+    nan_strategy : str, default="propagate"
+        How to handle NaN values in the input series.
+    weight_by : str, default="recency"
+        Weighting mode when ``cf`` is "weighted".
+    """
 
     k: int | str | Sequence[int] = 3
     cf: str = "mean"
