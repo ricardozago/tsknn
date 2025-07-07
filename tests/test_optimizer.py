@@ -32,6 +32,18 @@ def test_random_search_runs():
     assert params is not None
 
 
+def test_early_stopping():
+    params, score = optimize_params(
+        X,
+        param_grid,
+        test_size=2,
+        method="random",
+        n_iter=5,
+        early_stopping_rounds=1,
+    )
+    assert params is not None
+
+
 def test_bayes_search_runs():
     params, score = optimize_params(
         X, param_grid, test_size=2, method="bayes", n_iter=2, random_state=0

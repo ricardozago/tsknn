@@ -6,6 +6,7 @@ import pandas as pd
 from skopt import gp_minimize
 from skopt.space import Categorical
 from skopt.utils import use_named_args
+from sklearn.model_selection import BaseCrossValidator
 
 from .tsknn import tsknn
 
@@ -74,6 +75,7 @@ def optimize_params(
     method: str = "grid",
     n_iter: int = 20,
     random_state: Optional[int] = None,
+    early_stopping_rounds: Optional[int] = None,
 ) -> Tuple[Optional[Dict[str, Any]], float]:
     """Optimize tsknn parameters for a single time series.
 
@@ -90,6 +92,8 @@ def optimize_params(
         Metric to evaluate predictions. Can be one of ``"rmse"``, ``"mae"`` or
         ``"mape"`` or a callable with signature ``metric(y_true, y_pred)``.
         Defaults to RMSE.
+    early_stopping_rounds : int, optional
+        Stop search if no improvement is seen for this many iterations.
 
     Returns
     -------
@@ -177,12 +181,18 @@ def optimize_params(
         }
         return best_params, best_score
 
+    no_improve = 0
     for values in search_space:
         params = dict(zip(param_names, values))
         score = evaluate(params)
         if score < best_score:
             best_score = score
             best_params = params
+            no_improve = 0
+        else:
+            no_improve += 1
+        if early_stopping_rounds is not None and no_improve >= early_stopping_rounds:
+            break
 
     return best_params, best_score
 
@@ -196,6 +206,8 @@ def cross_validate_params(
     method: str = "grid",
     n_iter: int = 20,
     random_state: Optional[int] = None,
+    cv: Optional[BaseCrossValidator] = None,
+    early_stopping_rounds: Optional[int] = None,
 ) -> Tuple[Optional[Dict[str, Any]], float]:
     """Optimize parameters using rolling origin cross-validation.
 
@@ -218,6 +230,10 @@ def cross_validate_params(
         Number of parameter sets evaluated for ``random`` or ``bayes`` search.
     random_state : int, optional
         Seed for randomization in ``random`` or ``bayes`` search.
+    cv : BaseCrossValidator, optional
+        scikit-learn cross-validator object to generate train/test splits.
+    early_stopping_rounds : int, optional
+        Stop search if no improvement is seen for this many iterations.
 
     Returns
     -------
@@ -251,15 +267,26 @@ def cross_validate_params(
         lags = params.get("lags", 1)
         max_lag = max(lags) if hasattr(lags, "__iter__") else lags
 
-        required_len = n_splits * test_size + max_lag
-        if len(X) <= required_len:
-            return np.inf
+        if cv is not None:
+            splits = list(cv.split(X))
+            required_len = max(max(train_idx) + 1 for train_idx, _ in splits)
+            if len(X) <= required_len:
+                return np.inf
+        else:
+            splits = []
+            for split in range(n_splits):
+                train_end = len(X) - (n_splits - split) * test_size
+                train_idx = np.arange(train_end)
+                test_idx = np.arange(train_end, train_end + test_size)
+                splits.append((train_idx, test_idx))
+            required_len = n_splits * test_size + max_lag
+            if len(X) <= required_len:
+                return np.inf
 
         scores = []
-        for split in range(n_splits):
-            train_end = len(X) - (n_splits - split) * test_size
-            train = X[:train_end]
-            test = X[train_end : train_end + test_size]
+        for train_idx, test_idx in splits:
+            train = X[train_idx]
+            test = X[test_idx]
             if len(train) <= max_lag:
                 return np.inf
             model = tsknn(**params)
@@ -308,12 +335,18 @@ def cross_validate_params(
         }
         return best_params, best_score
 
+    no_improve = 0
     for values in search_space:
         params = dict(zip(param_names, values))
         score = evaluate(params)
         if score < best_score:
             best_score = score
             best_params = params
+            no_improve = 0
+        else:
+            no_improve += 1
+        if early_stopping_rounds is not None and no_improve >= early_stopping_rounds:
+            break
 
     return best_params, best_score
 
@@ -328,6 +361,7 @@ def autotsknn(
     search_method: str = "grid",
     n_iter: int = 20,
     random_state: Optional[int] = None,
+    early_stopping_rounds: Optional[int] = None,
     **kwargs: Any,
 ) -> Tuple[tsknn, Dict[str, Any], float]:
     """Find and fit the best tsknn model over ranges of ``k`` and ``lags``.
@@ -355,6 +389,8 @@ def autotsknn(
         Number of parameter sets evaluated for ``random`` or ``bayes`` search.
     random_state : int, optional
         Seed used for randomization in ``random`` or ``bayes`` search.
+    early_stopping_rounds : int, optional
+        Stop search if no improvement is seen for this many iterations.
     **kwargs
         Additional parameters passed to ``tsknn``.
 
@@ -400,6 +436,7 @@ def autotsknn(
         method=search_method,
         n_iter=n_iter,
         random_state=random_state,
+        early_stopping_rounds=early_stopping_rounds,
     )
 
     if best_params is None:
