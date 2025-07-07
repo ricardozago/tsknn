@@ -1,4 +1,4 @@
-from .tsknn import tsknn, select_lags_pacf
+from .tsknn import tsknn, mtsknn, select_lags_pacf
 from .optimizer import (
     optimize_params,
     cross_validate_params,
@@ -12,6 +12,7 @@ from .optimizer import (
 
 __all__ = [
     "tsknn",
+    "mtsknn",
     "select_lags_pacf",
     "optimize_params",
     "cross_validate_params",
