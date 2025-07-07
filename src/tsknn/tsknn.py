@@ -2,8 +2,11 @@
 
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 
+from sklearn.base import BaseEstimator, RegressorMixin
+
 from numpy.lib.stride_tricks import sliding_window_view
 import numpy as np
+
 np.set_printoptions(suppress=True)
 from statsmodels.tsa.stattools import pacf
 
@@ -41,7 +44,9 @@ def cosine_distance(M: np.ndarray, v: np.ndarray) -> np.ndarray:
     return 1 - dot_prod / denom
 
 
-def get_distance(distance: str = "euclidean") -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+def get_distance(
+    distance: str = "euclidean",
+) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
     """Return a distance function identified by ``distance``."""
 
     if distance == "euclidean":
@@ -55,7 +60,9 @@ def get_distance(distance: str = "euclidean") -> Callable[[np.ndarray, np.ndarra
     return sum_euclidean
 
 
-def select_lags_pacf(x: Sequence[float], nlags: int, threshold: float = 0.2) -> List[int]:
+def select_lags_pacf(
+    x: Sequence[float], nlags: int, threshold: float = 0.2
+) -> List[int]:
     """Return lag indices with partial autocorrelation above ``threshold``."""
 
     pacf_vals = pacf(x, nlags=nlags)
@@ -63,7 +70,7 @@ def select_lags_pacf(x: Sequence[float], nlags: int, threshold: float = 0.2) -> 
     return lags if lags else list(range(1, nlags + 1))
 
 
-class tsknn:
+class tsknn(BaseEstimator, RegressorMixin):
     """K-nearest neighbors forecasting for univariate time series."""
 
     def __init__(
@@ -157,17 +164,23 @@ class tsknn:
             return x
         raise ValueError("Unknown nan_strategy")
 
-
-    def fit(self, X: np.ndarray) -> None:
+    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None) -> "tsknn":
         """Fit the model using the provided time series ``X``."""
         if self.k_strategy == "sqrt":
             self.k = max(1, int(np.sqrt(len(X))))
-        if self.msas == 'mimo' and (self.h + self.max_lag + (self.k if hasattr(self, 'k') else max(self.k_list)) >= X.shape[0]):
-            raise ValueError('You need a bigger series, or change the mode to recursive')
+        if self.msas == "mimo" and (
+            self.h + self.max_lag + (self.k if hasattr(self, "k") else max(self.k_list))
+            >= X.shape[0]
+        ):
+            raise ValueError(
+                "You need a bigger series, or change the mode to recursive"
+            )
         X = np.asarray(X, dtype=float)
         self.X = self._handle_missing(X)
 
-        self.windowed_arr = sliding_window_view(self.X[:-1], window_shape=(self.max_lag,), axis=0)
+        self.windowed_arr = sliding_window_view(
+            self.X[:-1], window_shape=(self.max_lag,), axis=0
+        )
         self.windowed_arr = self.windowed_arr[:, self.max_lag - self.lags[::-1]]
 
         if self.transform == "multiplicative" and not self.kmeans:
@@ -177,14 +190,23 @@ class tsknn:
             self.x_mean = self.windowed_arr.mean(axis=1)
             self.windowed_arr = self.windowed_arr - self.x_mean[:, np.newaxis]
 
-        self.windowed_arr = self.windowed_arr[:(1 - self.h_ef) if 1 - self.h_ef != 0 else None, :]
+        self.windowed_arr = self.windowed_arr[
+            : (1 - self.h_ef) if 1 - self.h_ef != 0 else None, :
+        ]
 
         if self.kmeans:
             from sklearn.cluster import KMeans
-            kmeans_model = KMeans(n_clusters=self.kmeans, random_state=self.random_state)
+
+            kmeans_model = KMeans(
+                n_clusters=self.kmeans, random_state=self.random_state
+            )
             kmeans_model.fit(self.windowed_arr)
-            self.kmeans_means = np.array([np.mean(self.windowed_arr[kmeans_model.labels_ == i], axis=0) 
-                                    for i in range(self.kmeans)])
+            self.kmeans_means = np.array(
+                [
+                    np.mean(self.windowed_arr[kmeans_model.labels_ == i], axis=0)
+                    for i in range(self.kmeans)
+                ]
+            )
             self.kmeans_labels = kmeans_model.labels_
 
             if self.transform == "multiplicative":
@@ -194,6 +216,7 @@ class tsknn:
                 self.x_mean = self.kmeans_means.mean(axis=1)
                 self.kmeans_means = self.kmeans_means - self.x_mean[:, np.newaxis]
 
+        return self
 
     def _get_k_closest_positions(
         self, x_pred: np.ndarray, k: Optional[int] = None, offset: int = 0
@@ -212,7 +235,11 @@ class tsknn:
         if self.kmeans:
             rolled_result = self.func_distance(self.kmeans_means, x_pred)
         else:
-            arr = self.windowed_arr[:len(self.windowed_arr)-offset] if offset else self.windowed_arr
+            arr = (
+                self.windowed_arr[: len(self.windowed_arr) - offset]
+                if offset
+                else self.windowed_arr
+            )
             rolled_result = self.func_distance(arr, x_pred)
         k_val = k if k is not None else self.k
         index_closests = np.argpartition(rolled_result, range(k_val))[:k_val]
@@ -227,30 +254,49 @@ class tsknn:
         if self.kmeans:
             resultado_final = np.zeros((len(k_closest), self.h_ef))
             for j, cluster in enumerate(k_closest):
-                eqcluster = [index for index, value in enumerate(self.kmeans_labels == cluster) if value]
+                eqcluster = [
+                    index
+                    for index, value in enumerate(self.kmeans_labels == cluster)
+                    if value
+                ]
 
                 resultado = np.zeros((len(eqcluster), self.h_ef))
                 for i, pos in enumerate(eqcluster):
                     if pos + self.h_ef <= self.X.shape[0]:
-                        resultado[i] = self.X[pos:pos + self.h_ef]
+                        resultado[i] = self.X[pos : pos + self.h_ef]
                 resultado = resultado.mean(0)
                 resultado_final[j] = resultado
 
             if self.transform == "multiplicative":
-                return (resultado_final / self.x_mean[k_closest, np.newaxis]) * self.x_pred_mean
+                return (
+                    resultado_final / self.x_mean[k_closest, np.newaxis]
+                ) * self.x_pred_mean
             elif self.transform == "additive":
-                return (resultado_final - self.x_mean[k_closest, np.newaxis]) + self.x_pred_mean
+                return (
+                    resultado_final - self.x_mean[k_closest, np.newaxis]
+                ) + self.x_pred_mean
 
             return resultado_final
 
-        k_closest = k_closest[:, np.newaxis] + np.tile(np.arange(self.h_ef), (len(k_closest), 1)) + self.max_lag + offset
+        k_closest = (
+            k_closest[:, np.newaxis]
+            + np.tile(np.arange(self.h_ef), (len(k_closest), 1))
+            + self.max_lag
+            + offset
+        )
 
         if self.transform == "multiplicative":
-            X = self.X[self.max_lag:]
-            return (np.take(X, k_closest - self.max_lag) / (self.x_mean[k_closest[:, 0] - self.max_lag, np.newaxis])) * self.x_pred_mean
+            X = self.X[self.max_lag :]
+            return (
+                np.take(X, k_closest - self.max_lag)
+                / (self.x_mean[k_closest[:, 0] - self.max_lag, np.newaxis])
+            ) * self.x_pred_mean
         elif self.transform == "additive":
-            X = self.X[self.max_lag:]
-            return (np.take(X, k_closest - self.max_lag) - (self.x_mean[k_closest[:, 0] - self.max_lag, np.newaxis])) + self.x_pred_mean
+            X = self.X[self.max_lag :]
+            return (
+                np.take(X, k_closest - self.max_lag)
+                - (self.x_mean[k_closest[:, 0] - self.max_lag, np.newaxis])
+            ) + self.x_pred_mean
 
         return np.take(self.X, k_closest)
 
@@ -277,7 +323,9 @@ class tsknn:
         """Return forecasts for the next ``h`` steps using context ``X``."""
 
         if X.shape[0] != self.max_lag:
-            raise ValueError('The biggest lag is different of the  length of example to predict')
+            raise ValueError(
+                "The biggest lag is different of the  length of example to predict"
+            )
 
         def _predict_internal(k_val):
             if self.msas == "recursive":
@@ -288,7 +336,9 @@ class tsknn:
                     k_close = self._get_k_closest(idx)
                     y_pred = self._get_mean(k_close, dist)[0]
                     y_preds.append(y_pred)
-                    x_curr = np.concatenate((x_curr, np.array([y_pred])), axis=0)[-self.max_lag:]
+                    x_curr = np.concatenate((x_curr, np.array([y_pred])), axis=0)[
+                        -self.max_lag :
+                    ]
                 return np.array(y_preds)
             elif self.msas == "mimo":
                 idx, dist = self._get_k_closest_positions(X, k=k_val)
@@ -297,8 +347,8 @@ class tsknn:
             elif self.msas == "direct":
                 y_preds = []
                 for j in range(1, self.h + 1):
-                    idx, dist = self._get_k_closest_positions(X, k=k_val, offset=j-1)
-                    k_close = self._get_k_closest(idx, offset=j-1)
+                    idx, dist = self._get_k_closest_positions(X, k=k_val, offset=j - 1)
+                    k_close = self._get_k_closest(idx, offset=j - 1)
                     y_pred = self._get_mean(k_close, dist)[0]
                     y_preds.append(y_pred)
                 return np.array(y_preds)
@@ -329,7 +379,7 @@ class tsknn:
         return obj
 
 
-class mtsknn:
+class mtsknn(BaseEstimator, RegressorMixin):
     """Multivariate wrapper around :class:`tsknn`.
 
     This class fits one ``tsknn`` model per column of a multivariate series
@@ -341,7 +391,7 @@ class mtsknn:
         self.models: List[tsknn] = []
         self.n_features = 0
 
-    def fit(self, X: np.ndarray) -> None:
+    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None) -> "mtsknn":
         """Fit one ``tsknn`` model per variable in ``X``."""
 
         X = np.asarray(X, dtype=float)
@@ -353,6 +403,7 @@ class mtsknn:
             model.fit(X[:, i])
         self.h = self.models[0].h
         self.max_lag = self.models[0].max_lag
+        return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Return forecasts for all variables in ``X``."""
