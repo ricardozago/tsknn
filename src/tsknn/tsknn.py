@@ -1,6 +1,6 @@
 """Core KNN utilities for time series forecasting."""
 
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 
 from numpy.lib.stride_tricks import sliding_window_view
 import numpy as np
@@ -309,3 +309,40 @@ class tsknn:
         else:
             k_val = self.k if hasattr(self, "k") else max(self.k_list)
             return _predict_internal(k_val)
+
+
+class mtsknn:
+    """Multivariate wrapper around :class:`tsknn`.
+
+    This class fits one ``tsknn`` model per column of a multivariate series
+    and returns joint forecasts for all of them.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.kwargs = kwargs
+        self.models: List[tsknn] = []
+        self.n_features = 0
+
+    def fit(self, X: np.ndarray) -> None:
+        """Fit one ``tsknn`` model per variable in ``X``."""
+
+        X = np.asarray(X, dtype=float)
+        if X.ndim == 1:
+            X = X[:, np.newaxis]
+        self.n_features = X.shape[1]
+        self.models = [tsknn(**self.kwargs) for _ in range(self.n_features)]
+        for i, model in enumerate(self.models):
+            model.fit(X[:, i])
+        self.h = self.models[0].h
+        self.max_lag = self.models[0].max_lag
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Return forecasts for all variables in ``X``."""
+
+        X = np.asarray(X, dtype=float)
+        if X.ndim == 1:
+            X = X[:, np.newaxis]
+        if X.shape[1] != self.n_features:
+            raise ValueError("Number of series in X does not match fitted model")
+        preds = [model.predict(X[:, i]) for i, model in enumerate(self.models)]
+        return np.column_stack(preds)
