@@ -115,6 +115,19 @@ Run the scripts with Python to see the results in action, for example:
 python examples/optimize_params_example.py
 ```
 
+## Model persistence
+
+Both `tsknn` and `mtsknn` instances can be saved to disk and loaded back:
+
+```python
+model = tsknn(lags=3, h=2)
+model.fit(X)
+model.save("model.pkl")
+
+loaded = tsknn.load("model.pkl")
+preds = loaded.predict(X[-3:])
+```
+
 ## Tests
 Unit tests can be run with `pytest` after installing the development dependencies:
 
