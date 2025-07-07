@@ -1,34 +1,34 @@
 # tsknn
 
-`tsknn` é uma implementação em Python do algoritmo k-nearest neighbors (KNN) aplicada à predição de séries temporais. O pacote oferece funções para seleção de lags, otimização de hiperparâmetros e diferentes estratégias de previsão.
+`tsknn` is a Python implementation of the k-nearest neighbors (KNN) algorithm aimed at time series forecasting. The package provides utilities for lag selection, hyperparameter optimisation and multiple forecasting strategies.
 
-## Recursos principais
+## Key features
 
-- Suporte a várias métricas de distância: `euclidean`, `manhattan`, `chebyshev` e `cosine`.
-- Diferentes formas de agregação dos vizinhos (`cf`): média, mediana, ponderada ou trimmed.
-- Modos de previsão MIMO, recursivo e direto (`msas`).
-- Transformações aditivas ou multiplicativas para remoção de tendência.
-- Função `optimize_params` para busca de melhores hiperparâmetros.
-- Validação cruzada com `cross_validate_params` para escolher `k` e `lags`.
-- Suporte a otimização por *grid search*, *random search* ou método bayesiano.
-- Tratamento opcional de valores ausentes com o parâmetro `nan_strategy`.
-- Ponderação dos vizinhos por recência ou pela distância real via `weight_by`.
+- Support for several distance metrics: `euclidean`, `manhattan`, `chebyshev` and `cosine`.
+- Different aggregation schemes for neighbours (`cf`): mean, median, weighted or trimmed.
+- MIMO, recursive and direct forecasting modes (`msas`).
+- Additive or multiplicative transformations for trend removal.
+- `optimize_params` helper to search for the best hyperparameters.
+- Cross validation via `cross_validate_params` to choose `k` and `lags`.
+- Optimisation by *grid search*, *random search* or Bayesian approach.
+- Optional handling of missing values with the `nan_strategy` argument.
+- Weight neighbours by recency or real distance through `weight_by`.
 
-## Instalação
+## Installation
 
 ```bash
 pip install tsknn
 ```
 
-Para desenvolvimento local, clone o repositório e instale em modo editável:
+For local development clone the repository and install it in editable mode:
 
 ```bash
 pip install -e .
 ```
 
-## Exemplo rápido
+## Quick example
 
-O exemplo abaixo utiliza os dados de passageiros aéreos disponíveis em `data/AirPassengers.csv` para prever os próximos 12 meses.
+The example below uses the air passengers data in `data/AirPassengers.csv` to forecast the next 12 months.
 
 ```python
 import pandas as pd
@@ -46,15 +46,15 @@ X_pred = X[-lags:]
 model = tsknn(k=3, h=12, transform="multiplicative", lags=lags,
               nan_strategy="interpolate")
 model.fit(X)
-previsao = model.predict(X_pred)
-print(previsao)
+forecast = model.predict(X_pred)
+print(forecast)
 ```
-Um script completo pode ser encontrado em `examples/knn_example.py`.
+A full script can be found at `examples/knn_example.py`.
 
-## Otimização de hiperparâmetros
+## Hyperparameter optimisation
 
-Utilize `optimize_params` para encontrar a melhor combinação de parâmetros. Informe um `param_grid` com os valores a serem testados e uma série de validação. É possível escolher a métrica passando `metric` como nome ou função.
-Também é possível definir o método de busca com o argumento `method`.
+Use `optimize_params` to find the best combination of parameters. Provide a `param_grid` with the values to test and a validation series. The metric can be passed as name or function.
+You can also define the search method with the `method` argument.
 
 ```python
 from tsknn import optimize_params
@@ -64,59 +64,52 @@ param_grid = {
     "lags": [3, 5],
     "h": [12]
 }
-# escolha a métrica entre "rmse", "mae" ou "mape"
-melhores, score = optimize_params(X, param_grid, metric="mae", method="random", n_iter=10)
-print(melhores, score)
-```
+# choose the metric among "rmse", "mae" or "mape"
+best, score = optimize_params(X, param_grid, metric="mae", method="random", n_iter=10)
+print(best, score)
 
-Para avaliar as combinações em várias divisões da série utilize `cross_validate_params`:
+To evaluate combinations across multiple splits of the series use `cross_validate_params`:
 
 ```python
 from tsknn import cross_validate_params
 
-melhores, score = cross_validate_params(X, param_grid, n_splits=3)
-print(melhores, score)
+best, score = cross_validate_params(X, param_grid, n_splits=3)
+print(best, score)
 ```
 
-## Seleção automática de modelo
+## Automatic model selection
 
-Para automatizar a busca e já retornar um modelo treinado utilize `autotsknn`.
-Ele avalia diferentes combinações de `k` e `lags` e devolve o melhor modelo.
-
+To automate the search and return a trained model, use `autotsknn`.
+It evaluates different combinations of `k` and `lags` and returns the best model.
 ```python
 from tsknn import autotsknn
 
-# executa a busca utilizando valores padrao de k e lags
-modelo, params, score = autotsknn(X, h=12, search_method="bayes", n_iter=15)
+# runs the search using default values for k and lags
+model, params, score = autotsknn(X, h=12, search_method="bayes", n_iter=15)
 print(params, score)
 ```
 
-## Exemplos adicionais
+## Additional examples
 
-Na pasta `examples/` há scripts completos demonstrando diferentes fluxos de uso
-da biblioteca:
+The `examples/` folder contains complete scripts demonstrating different usage flows:
+- `knn_example.py` – direct execution of `tsknn` forecasting 5 values.
+- `optimize_params_example.py` – usage of `optimize_params` to search for the best hyperparameters.
+- `autotsknn_example.py` – automatic selection of `k` and `lags` with Bayesian optimisation.
 
-- `knn_example.py` – execução direta do `tsknn` com previsão de 5 valores.
-- `optimize_params_example.py` – uso da função `optimize_params` para buscar os
-  melhores hiperparâmetros.
-- `autotsknn_example.py` – seleção automática de `k` e `lags` com otimização
-  bayesiana.
-
-Execute os scripts com Python para ver os resultados em ação, por exemplo:
+Run the scripts with Python to see the results in action, for example:
 
 ```bash
 python examples/optimize_params_example.py
 ```
 
-## Testes
-
-Os testes unitários podem ser executados com `pytest` após instalar as dependências de desenvolvimento:
+## Tests
+Unit tests can be run with `pytest` after installing the development dependencies:
 
 ```bash
-pip install -e .[dev]
+pip install -r requirements-dev.txt
 pytest
 ```
 
-## Licença
+## Licence
 
-Distribuído sob a licença MIT. Consulte o arquivo `LICENSE` para mais informações.
+Distributed under the MIT licence. See the `LICENSE` file for further information.
