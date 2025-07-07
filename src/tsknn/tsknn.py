@@ -310,6 +310,24 @@ class tsknn:
             k_val = self.k if hasattr(self, "k") else max(self.k_list)
             return _predict_internal(k_val)
 
+    def save(self, path: str) -> None:
+        """Serialize model to ``path`` using :mod:`pickle`."""
+        import pickle
+
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, path: str) -> "tsknn":
+        """Load a model instance from ``path``."""
+        import pickle
+
+        with open(path, "rb") as f:
+            obj = pickle.load(f)
+        if not isinstance(obj, cls):
+            raise TypeError("Loaded object is not a tsknn instance")
+        return obj
+
 
 class mtsknn:
     """Multivariate wrapper around :class:`tsknn`.
@@ -346,3 +364,21 @@ class mtsknn:
             raise ValueError("Number of series in X does not match fitted model")
         preds = [model.predict(X[:, i]) for i, model in enumerate(self.models)]
         return np.column_stack(preds)
+
+    def save(self, path: str) -> None:
+        """Serialize multivariate model to ``path`` using :mod:`pickle`."""
+        import pickle
+
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, path: str) -> "mtsknn":
+        """Load a :class:`mtsknn` instance from ``path``."""
+        import pickle
+
+        with open(path, "rb") as f:
+            obj = pickle.load(f)
+        if not isinstance(obj, cls):
+            raise TypeError("Loaded object is not a mtsknn instance")
+        return obj
