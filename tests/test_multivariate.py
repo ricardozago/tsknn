@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from numpy.testing import assert_almost_equal
 
-from tsknn import mtsknn, tsknn
+from tsknn import tsknn
 
 df = pd.read_csv("data/AirPassengers.csv")
 df["Month"] = pd.to_datetime(df["Month"])
@@ -15,14 +15,14 @@ df["passengers2"] = df["passengers"] * 2
 X = df[["passengers", "passengers2"]].values
 
 
-def test_mtsknn_shapes():
-    model = mtsknn(lags=3, h=2)
+def test_multivariate_shapes():
+    model = tsknn(lags=3, h=2)
     model.fit(X)
     preds = model.predict(X[-3:])
     assert preds.shape == (2, 2)
 
 
-def test_mtsknn_equivalence():
+def test_multivariate_equivalence():
     m1 = tsknn(lags=3, h=2)
     m2 = tsknn(lags=3, h=2)
     m1.fit(X[:, 0])
@@ -30,7 +30,7 @@ def test_mtsknn_equivalence():
     p1 = m1.predict(X[-3:, 0])
     p2 = m2.predict(X[-3:, 1])
 
-    mm = mtsknn(lags=3, h=2)
+    mm = tsknn(lags=3, h=2)
     mm.fit(X)
     pm = mm.predict(X[-3:])
 

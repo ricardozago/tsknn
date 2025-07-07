@@ -1,6 +1,6 @@
 """Core KNN utilities for time series forecasting."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -88,7 +88,7 @@ class TSKNNConfig:
 
 
 class tsknn(BaseEstimator, RegressorMixin):
-    """K-nearest neighbors forecasting for univariate time series."""
+    """K-nearest neighbors forecasting for univariate or multivariate series."""
 
     def __init__(
         self,
@@ -103,6 +103,7 @@ class tsknn(BaseEstimator, RegressorMixin):
         random_state: Optional[int] = None,
         nan_strategy: str = "propagate",
         weight_by: str = "recency",
+        _is_internal: bool = False,
     ) -> None:
         """Initialize a ``tsknn`` model.
 
@@ -181,6 +182,11 @@ class tsknn(BaseEstimator, RegressorMixin):
 
         self._validate_params()
 
+        self._is_internal = _is_internal
+        self.is_multivariate = False
+        self.models: List["tsknn"] = []
+        self.n_features = 1
+
     def _validate_params(self) -> None:
         """Validate configuration options."""
         if self.weight_by not in {"recency", "distance"}:
@@ -207,8 +213,7 @@ class tsknn(BaseEstimator, RegressorMixin):
             return x
         raise ValueError("Unknown nan_strategy")
 
-    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None) -> "tsknn":
-        """Fit the model using the provided time series ``X``."""
+    def _fit_univariate(self, X: np.ndarray) -> "tsknn":
         if self.k_strategy == "sqrt":
             self.k = max(1, int(np.sqrt(len(X))))
         if self.msas == "mimo" and (
@@ -218,7 +223,7 @@ class tsknn(BaseEstimator, RegressorMixin):
             raise ValueError(
                 "You need a bigger series, or change the mode to recursive"
             )
-        X = np.asarray(X, dtype=float)
+
         self.X = self._handle_missing(X)
 
         self.windowed_arr = sliding_window_view(
@@ -260,6 +265,28 @@ class tsknn(BaseEstimator, RegressorMixin):
                 self.kmeans_means = self.kmeans_means - self.x_mean[:, np.newaxis]
 
         return self
+
+    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None) -> "tsknn":
+        """Fit the model using ``X`` which can be 1D or 2D."""
+
+        X = np.asarray(X, dtype=float)
+        if X.ndim > 1 and not self._is_internal:
+            if X.ndim != 2:
+                raise ValueError("Input array must be 1D or 2D")
+            self.is_multivariate = True
+            self.n_features = X.shape[1]
+            cfg = asdict(self.config)
+            self.models = [
+                tsknn(_is_internal=True, **cfg) for _ in range(self.n_features)
+            ]
+            for i, model in enumerate(self.models):
+                model.fit(X[:, i])
+            self.h = self.models[0].h
+            self.max_lag = self.models[0].max_lag
+            return self
+
+        self.is_multivariate = False
+        return self._fit_univariate(X)
 
     def _prepare_pred(self, x_pred: np.ndarray) -> np.ndarray:
         """Return ``x_pred`` after applying transformation and store its mean."""
@@ -369,6 +396,16 @@ class tsknn(BaseEstimator, RegressorMixin):
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Return forecasts for the next ``h`` steps using context ``X``."""
 
+        X = np.asarray(X, dtype=float)
+
+        if self.is_multivariate and not self._is_internal:
+            if X.ndim == 1:
+                X = X[:, np.newaxis]
+            if X.shape[1] != self.n_features:
+                raise ValueError("Number of series in X does not match fitted model")
+            preds = [model.predict(X[:, i]) for i, model in enumerate(self.models)]
+            return np.column_stack(preds)
+
         if X.shape[0] != self.max_lag:
             raise ValueError(
                 "The biggest lag is different of the  length of example to predict"
@@ -423,60 +460,4 @@ class tsknn(BaseEstimator, RegressorMixin):
             obj = pickle.load(f)
         if not isinstance(obj, cls):
             raise TypeError("Loaded object is not a tsknn instance")
-        return obj
-
-
-class mtsknn(BaseEstimator, RegressorMixin):
-    """Multivariate wrapper around :class:`tsknn`.
-
-    This class fits one ``tsknn`` model per column of a multivariate series
-    and returns joint forecasts for all of them.
-    """
-
-    def __init__(self, **kwargs: Any) -> None:
-        self.kwargs = kwargs
-        self.models: List[tsknn] = []
-        self.n_features = 0
-
-    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None) -> "mtsknn":
-        """Fit one ``tsknn`` model per variable in ``X``."""
-
-        X = np.asarray(X, dtype=float)
-        if X.ndim == 1:
-            X = X[:, np.newaxis]
-        self.n_features = X.shape[1]
-        self.models = [tsknn(**self.kwargs) for _ in range(self.n_features)]
-        for i, model in enumerate(self.models):
-            model.fit(X[:, i])
-        self.h = self.models[0].h
-        self.max_lag = self.models[0].max_lag
-        return self
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        """Return forecasts for all variables in ``X``."""
-
-        X = np.asarray(X, dtype=float)
-        if X.ndim == 1:
-            X = X[:, np.newaxis]
-        if X.shape[1] != self.n_features:
-            raise ValueError("Number of series in X does not match fitted model")
-        preds = [model.predict(X[:, i]) for i, model in enumerate(self.models)]
-        return np.column_stack(preds)
-
-    def save(self, path: str) -> None:
-        """Serialize multivariate model to ``path`` using :mod:`pickle`."""
-        import pickle
-
-        with open(path, "wb") as f:
-            pickle.dump(self, f)
-
-    @classmethod
-    def load(cls, path: str) -> "mtsknn":
-        """Load a :class:`mtsknn` instance from ``path``."""
-        import pickle
-
-        with open(path, "rb") as f:
-            obj = pickle.load(f)
-        if not isinstance(obj, cls):
-            raise TypeError("Loaded object is not a mtsknn instance")
         return obj

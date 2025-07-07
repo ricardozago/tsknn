@@ -13,7 +13,7 @@
 - Optimisation by *grid search*, *random search* or Bayesian approach.
 - Optional handling of missing values with the `nan_strategy` argument.
 - Weight neighbours by recency or real distance through `weight_by`.
-- Multivariate forecasting via the `mtsknn` class.
+- Multivariate forecasting via the `tsknn` class.
 
 ## Installation
 
@@ -52,13 +52,13 @@ print(forecast)
 ```
 A full script can be found at `examples/knn_example.py`.
 
-For multiple series you can use `mtsknn`:
+`tsknn` also works with multivariate inputs:
 
 ```python
-from tsknn import tsknn, mtsknn
+from tsknn import tsknn
 df["passengers2"] = df["passengers"] * 1.1
 X_multi = df[["passengers", "passengers2"]].values
-model = mtsknn(k=3, h=12, lags=3)
+model = tsknn(k=3, h=12, lags=3)
 model.fit(X_multi)
 forecast = model.predict(X_multi[-3:])
 print(forecast)
@@ -117,7 +117,7 @@ python examples/optimize_params_example.py
 
 ## Model persistence
 
-Both `tsknn` and `mtsknn` instances can be saved to disk and loaded back:
+`tsknn` models can be saved to disk and loaded back:
 
 ```python
 model = tsknn(lags=3, h=2)

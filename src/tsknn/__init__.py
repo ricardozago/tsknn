@@ -8,11 +8,13 @@ from .optimizer import (
     optimize_params,
     rmse,
 )
-from .tsknn import mtsknn, select_lags_pacf, tsknn
+from .tsknn import select_lags_pacf, tsknn
+
+# ``mtsknn`` is kept as an alias for backward compatibility.
+mtsknn = tsknn
 
 __all__ = [
     "tsknn",
-    "mtsknn",
     "select_lags_pacf",
     "optimize_params",
     "cross_validate_params",
