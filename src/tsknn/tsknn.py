@@ -44,6 +44,26 @@ def cosine_distance(M: np.ndarray, v: np.ndarray) -> np.ndarray:
     return 1 - dot_prod / denom
 
 
+def dtw_distance(M: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """Return the DTW distance between ``v`` and each row of ``M``."""
+
+    def _dtw(x: np.ndarray, y: np.ndarray) -> float:
+        n, m = len(x), len(y)
+        dtw_matrix = np.full((n + 1, m + 1), np.inf)
+        dtw_matrix[0, 0] = 0.0
+        for i in range(1, n + 1):
+            for j in range(1, m + 1):
+                cost = abs(x[i - 1] - y[j - 1])
+                dtw_matrix[i, j] = cost + min(
+                    dtw_matrix[i - 1, j],
+                    dtw_matrix[i, j - 1],
+                    dtw_matrix[i - 1, j - 1],
+                )
+        return float(dtw_matrix[n, m])
+
+    return np.array([_dtw(row, v) for row in M])
+
+
 def get_distance(
     distance: str = "euclidean",
 ) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
@@ -57,6 +77,8 @@ def get_distance(
         return max_chebyshev
     if distance == "cosine":
         return cosine_distance
+    if distance == "dtw":
+        return dtw_distance
     return sum_euclidean
 
 

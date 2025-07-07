@@ -4,7 +4,7 @@
 
 ## Key features
 
-- Support for several distance metrics: `euclidean`, `manhattan`, `chebyshev` and `cosine`.
+- Support for several distance metrics: `euclidean`, `manhattan`, `chebyshev`, `cosine` and `dtw`.
 - Different aggregation schemes for neighbours (`cf`): mean, median, weighted or trimmed.
 - MIMO, recursive and direct forecasting modes (`msas`).
 - Additive or multiplicative transformations for trend removal.
