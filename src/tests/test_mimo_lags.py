@@ -18,7 +18,7 @@ X_pred = df.values.T[0][-np.max(lags):]
 
 def test_answer():
     lags = [1, 5, 6]
-    model = tsknn(cf="mean", h=12, transform="None", lags=lags, k=3, msas="mimo")
+    model = tsknn(cf="mean", h=12, transform=None, lags=lags, k=3, msas="mimo")
     model.fit(X)
     x_pred = model.predict(X_pred)
     resp = np.array([778.77112586, 777.71784266, 779.88881445, 780.20742693, 780.67856748,
