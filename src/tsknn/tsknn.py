@@ -31,6 +31,7 @@ class tsknn:
                  msas: str = "recursive",
                  kmeans: int = None,
                  random_state: int = None,
+                 force_stable: bool = False
                  ):
         # Type and value validation
         if not isinstance(k, int) or k < 1:
@@ -64,6 +65,7 @@ class tsknn:
             self.h_ef = h
         self.kmeans = kmeans
         self.random_state = random_state
+        self.force_stable = force_stable
 
     def fit(self, X: np.ndarray) -> None:
         """
@@ -101,24 +103,24 @@ class tsknn:
             :(1 - self.h_ef) if 1 - self.h_ef != 0 else None, :
         ]
 
-        if self.kmeans:
-            from sklearn.cluster import KMeans
-            kmeans_model = KMeans(
-                n_clusters=self.kmeans, random_state=self.random_state
-            )
-            kmeans_model.fit(self.windowed_arr)
-            self.kmeans_means = np.array([
-                np.mean(self.windowed_arr[kmeans_model.labels_ == i], axis=0)
-                for i in range(self.kmeans)
-            ])
-            self.kmeans_labels = kmeans_model.labels_
+        # if self.kmeans:
+        #     from sklearn.cluster import KMeans
+        #     kmeans_model = KMeans(
+        #         n_clusters=self.kmeans, random_state=self.random_state
+        #     )
+        #     kmeans_model.fit(self.windowed_arr)
+        #     self.kmeans_means = np.array([
+        #         np.mean(self.windowed_arr[kmeans_model.labels_ == i], axis=0)
+        #         for i in range(self.kmeans)
+        #     ])
+        #     self.kmeans_labels = kmeans_model.labels_
 
-            if self.transform == "multiplicative":
-                self.x_mean = self.kmeans_means.mean(axis=1)
-                self.kmeans_means = self.kmeans_means / self.x_mean[:, np.newaxis]
-            elif self.transform == "additive":
-                self.x_mean = self.kmeans_means.mean(axis=1)
-                self.kmeans_means = self.kmeans_means - self.x_mean[:, np.newaxis]
+        #     if self.transform == "multiplicative":
+        #         self.x_mean = self.kmeans_means.mean(axis=1)
+        #         self.kmeans_means = self.kmeans_means / self.x_mean[:, np.newaxis]
+        #     elif self.transform == "additive":
+        #         self.x_mean = self.kmeans_means.mean(axis=1)
+        #         self.kmeans_means = self.kmeans_means - self.x_mean[:, np.newaxis]
 
     def _get_k_closest_positions(self, x_pred: np.ndarray):
         """
@@ -147,6 +149,8 @@ class tsknn:
         else:
             rolled_result = self.func_distance(self.windowed_arr, x_pred)
         index_closests = np.argpartition(rolled_result, range(self.k))[:self.k]
+        if self.force_stable:
+            index_closests = np.argsort(rolled_result, stable=True)[:self.k]
         distances = self.X.shape[0] - index_closests
         return index_closests, distances
 
@@ -158,24 +162,24 @@ class tsknn:
         Returns:
             np.ndarray: Sequences of the neighbors.
         """
-        if self.kmeans:
-            result_final = np.zeros((len(k_closest), self.h_ef))
-            for j, cluster in enumerate(k_closest):
-                eqcluster = [idx for idx, value in enumerate(self.kmeans_labels == cluster) if value]
+        # if self.kmeans:
+        #     result_final = np.zeros((len(k_closest), self.h_ef))
+        #     for j, cluster in enumerate(k_closest):
+        #         eqcluster = [idx for idx, value in enumerate(self.kmeans_labels == cluster) if value]
 
-                result = np.zeros((len(eqcluster), self.h_ef))
-                for i, pos in enumerate(eqcluster):
-                    if pos + self.h_ef <= self.X.shape[0]:
-                        result[i] = self.X[pos:pos + self.h_ef]
-                result = result.mean(0)
-                result_final[j] = result
+        #         result = np.zeros((len(eqcluster), self.h_ef))
+        #         for i, pos in enumerate(eqcluster):
+        #             if pos + self.h_ef <= self.X.shape[0]:
+        #                 result[i] = self.X[pos:pos + self.h_ef]
+        #         result = result.mean(0)
+        #         result_final[j] = result
 
-            if self.transform == "multiplicative":
-                return (result_final / self.x_mean[k_closest, np.newaxis]) * self.x_pred_mean
-            elif self.transform == "additive":
-                return (result_final - self.x_mean[k_closest, np.newaxis]) + self.x_pred_mean
+        #     if self.transform == "multiplicative":
+        #         return (result_final / self.x_mean[k_closest, np.newaxis]) * self.x_pred_mean
+        #     elif self.transform == "additive":
+        #         return (result_final - self.x_mean[k_closest, np.newaxis]) + self.x_pred_mean
 
-            return result_final
+        #     return result_final
 
         k_closest = (
             k_closest[:, np.newaxis]
@@ -216,7 +220,7 @@ class tsknn:
             return reciprocal_d.dot(k_closest)[0] / reciprocal_d.sum()
         return k_closest.mean()
 
-    def predict(self, X: np.ndarray) -> np.ndarray:
+    def predict(self, X=None) -> np.ndarray:
         """
         Makes predictions for the defined horizon.
         Args:
@@ -226,6 +230,8 @@ class tsknn:
         Raises:
             ValueError: If the size of X is not equal to the largest lag.
         """
+        if X is None:
+            X = self.X[-self.maxlags:]
         if not isinstance(X, np.ndarray):
             raise TypeError("X must be a np.ndarray.")
         if X.ndim != 1:
