@@ -1,9 +1,7 @@
 from numpy.lib.stride_tricks import sliding_window_view
 import numpy as np
-np.set_printoptions(suppress=True)
-
-# Funções utilitárias importadas do módulo utils.distance
 from .utils.distance import get_distance
+np.set_printoptions(suppress=True)
 
 
 class tsknn:
@@ -33,7 +31,6 @@ class tsknn:
                  random_state: int = None,
                  force_stable: bool = False
                  ):
-        # Type and value validation
         if not isinstance(k, int) or k < 1:
             raise ValueError("k must be a positive integer.")
         if cf.lower() not in {"mean", "median", "weighted"}:
@@ -131,8 +128,8 @@ class tsknn:
             Tuple[np.ndarray, np.ndarray]: Indices of neighbors and distances.
         """
 
-        # rolled_result = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=self.windowed_arr)
-        # rolled_result = np.sum((self.windowed_arr - x_pred)**2, axis=-1)
+        # rolled_distances = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=self.windowed_arr)
+        # rolled_distances = np.sum((self.windowed_arr - x_pred)**2, axis=-1)
 
         if isinstance(self.lags, list):
             x_pred = x_pred[[self.maxlags - x for x in self.lags]]
@@ -145,14 +142,14 @@ class tsknn:
             x_pred = x_pred - self.x_pred_mean
 
         if self.kmeans:
-            rolled_result = self.func_distance(self.kmeans_means, x_pred)
+            rolled_distances = self.func_distance(self.kmeans_means, x_pred)
         else:
-            rolled_result = self.func_distance(self.windowed_arr, x_pred)
-        index_closests = np.argpartition(rolled_result, range(self.k))[:self.k]
+            rolled_distances = self.func_distance(self.windowed_arr, x_pred)
+        index_closests = np.argpartition(rolled_distances, range(self.k))[:self.k]
         if self.force_stable:
-            index_closests = np.argsort(rolled_result, stable=True)[:self.k]
-        distances = self.X.shape[0] - index_closests
-        return index_closests, distances
+            index_closests = np.argsort(rolled_distances, stable=True)[:self.k]
+        # distances = self.X.shape[0] - index_closests
+        return index_closests, rolled_distances
 
     def _get_k_closest(self, k_closest: np.ndarray) -> np.ndarray:
         """
@@ -202,7 +199,10 @@ class tsknn:
 
         return np.take(self.X, k_closest)
 
-    def _get_mean(self, k_closest: np.ndarray, distances: np.ndarray = None) -> np.ndarray:
+    def _get_mean(self, 
+                  k_closest: np.ndarray,
+                  index_closests: np.ndarray,
+                  rolled_distances: np.ndarray) -> np.ndarray:
         """
         Returns the mean of the neighbors according to the combination function.
         Args:
@@ -216,9 +216,9 @@ class tsknn:
         elif self.cf == "median":
             return np.median(k_closest, axis=0)
         elif self.cf == "weighted":  # to do, fix for mimo case
-            reciprocal_d = 1 / np.sqrt(distances)
-            return reciprocal_d.dot(k_closest)[0] / reciprocal_d.sum()
-        return k_closest.mean()
+            reciprocal_d = 1 / np.sqrt(rolled_distances[index_closests])
+            return reciprocal_d.dot(k_closest) / reciprocal_d.sum()
+        return k_closest.mean(axis=0)
 
     def predict(self, X=None) -> np.ndarray:
         """
@@ -241,14 +241,14 @@ class tsknn:
         if self.msas == "recursive":
             y_preds = []
             for _ in range(self.h):
-                index_closests, distances = self._get_k_closest_positions(X)
+                index_closests, rolled_distances = self._get_k_closest_positions(X)
                 k_closest = self._get_k_closest(index_closests)
-                y_pred = self._get_mean(k_closest, distances)[0]
+                y_pred = self._get_mean(k_closest, index_closests, rolled_distances)[0]
                 y_preds.append(y_pred)
                 X = np.concatenate((X, np.array([y_pred])), axis=0)[-self.maxlags:]
             y_preds = np.array(y_preds)
         elif self.msas == "mimo":
-            index_closests, distances = self._get_k_closest_positions(X)
+            index_closests, rolled_distances = self._get_k_closest_positions(X)
             k_closest = self._get_k_closest(index_closests)
-            y_preds = self._get_mean(k_closest, distances)
+            y_preds = self._get_mean(k_closest, index_closests, rolled_distances)
         return y_preds
