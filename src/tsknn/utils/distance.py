@@ -9,8 +9,10 @@ def sum_euclidean(M: np.ndarray, v: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: Array of distances for each row of M.
     """
+    # https://stackoverflow.com/a/49633639
     tmp = M - v
     return np.einsum('ij,ij->i', tmp, tmp)
+
 
 def get_distance(distance: str = "euclidean"):
     """

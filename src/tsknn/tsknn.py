@@ -215,8 +215,11 @@ class tsknn:
             return k_closest.mean(axis=0)
         elif self.cf == "median":
             return np.median(k_closest, axis=0)
-        elif self.cf == "weighted":  # to do, fix for mimo case
-            reciprocal_d = 1 / np.sqrt(rolled_distances[index_closests])
+        elif self.cf == "weighted":
+            d = rolled_distances[index_closests]
+            if np.abs(d[0]) < 1e-14:
+                return k_closest[0]
+            reciprocal_d = 1 / np.sqrt(d)
             return reciprocal_d.dot(k_closest) / reciprocal_d.sum()
         return k_closest.mean(axis=0)
 
