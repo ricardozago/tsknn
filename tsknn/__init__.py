@@ -1,1 +1,1 @@
-from tsknn import tsknn
+from .tsknn import tsknn
