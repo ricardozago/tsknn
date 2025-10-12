@@ -4,7 +4,7 @@ from rpy2.robjects import r, pandas2ri, globalenv
 from rpy2.robjects.conversion import localconverter
 from rpy2.robjects.vectors import IntVector, FloatVector
 from numpy.testing import assert_almost_equal
-from tsknn.tsknn import tsknn
+from tsknn import tsknn
 
 np.set_printoptions(suppress=True)
 

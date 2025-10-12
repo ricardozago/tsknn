@@ -1,7 +1,5 @@
-from numpy.lib.stride_tricks import sliding_window_view
 import numpy as np
-from .utils.distance import get_distance
-np.set_printoptions(suppress=True)
+from numpy.lib.stride_tricks import sliding_window_view
 
 
 class tsknn:
@@ -19,6 +17,7 @@ class tsknn:
         kmeans (int|None): Number of clusters for KMeans (optional).
         random_state (int|None): Seed for reproducibility.
     """
+
     def __init__(self,
                  k=3,
                  cf: str = "mean",
@@ -31,13 +30,18 @@ class tsknn:
                  random_state: int = None,
                  force_stable: bool = False
                  ):
-        if not (isinstance(k, int) and k >= 1) and not (isinstance(k, list) and all(isinstance(ki, int) and ki >= 1 for ki in k)):
-            raise ValueError("k must be a positive integer or a list of positive integers.")
+        if not (isinstance(k, int) and k >= 1) and not (isinstance(
+                k, list) and all(isinstance(ki, int) and ki >= 1 for ki in k)):
+            raise ValueError(
+                "k must be a positive integer or a list of positive integers.")
         if cf.lower() not in {"mean", "median", "weighted"}:
             raise ValueError("cf must be 'mean', 'median' or 'weighted'.")
-        if transform is not None and transform.lower() not in {"additive", "multiplicative"}:
-            raise ValueError(f"transform must be 'additive', 'multiplicative' or None, not {transform}")
-        if not (isinstance(lags, int) or (isinstance(lags, list) and all(isinstance(lag, int) for lag in lags))):
+        if transform is not None and transform.lower() not in {
+                "additive", "multiplicative"}:
+            raise ValueError(
+                f"transform must be 'additive', 'multiplicative' or None, not {transform}")
+        if not (isinstance(lags, int) or (isinstance(lags, list)
+                and all(isinstance(lag, int) for lag in lags))):
             raise ValueError("lags must be an integer or a list of integers.")
         if not isinstance(h, int) or h < 1:
             raise ValueError("h must be a positive integer.")
@@ -72,7 +76,8 @@ class tsknn:
             raise TypeError("X must be a np.ndarray.")
         if X.ndim != 1:
             raise ValueError("X must be a one-dimensional array.")
-        if self.msas == 'mimo' and (self.h + self.maxlags + np.max(self.k) >= X.shape[0]):
+        if self.msas == 'mimo' and (
+                self.h + self.maxlags + np.max(self.k) >= X.shape[0]):
             raise ValueError(
                 'You need a bigger series, or change the mode to recursive'
             )
@@ -83,7 +88,8 @@ class tsknn:
         )
 
         if isinstance(self.lags, list):
-            self.lag_indices = np.array([self.maxlags - lag for lag in self.lags])
+            self.lag_indices = np.array(
+                [self.maxlags - lag for lag in self.lags])
             self.windowed_arr = self.windowed_arr[:, self.lag_indices]
         else:
             self.lag_indices = None
@@ -99,7 +105,8 @@ class tsknn:
             :(1 - self.h_ef) if 1 - self.h_ef != 0 else None, :
         ]
 
-    def _get_k_closest_positions(self, x_pred: np.ndarray, k: int = None) -> tuple[np.ndarray, np.ndarray]:
+    def _get_k_closest_positions(
+            self, x_pred: np.ndarray, k: int = None) -> tuple[np.ndarray, np.ndarray]:
         """
         Returns the positions of the k nearest neighbors.
         Args:
@@ -206,7 +213,8 @@ class tsknn:
         if X.ndim != 1:
             raise ValueError("X must be a one-dimensional array.")
         if X.shape[0] != self.maxlags:
-            raise ValueError('The biggest lag is different from the length of the example to predict')
+            raise ValueError(
+                'The biggest lag is different from the length of the example to predict')
         k_list = self.k if isinstance(self.k, list) else [self.k]
         results = []
         for k in k_list:
@@ -214,17 +222,50 @@ class tsknn:
                 y_preds = []
                 X_temp = np.copy(X)
                 for _ in range(self.h):
-                    index_closests, rolled_distances, x_pred_mean = self._get_k_closest_positions(X_temp, k)
-                    k_closest = self._get_k_closest(index_closests, x_pred_mean)
-                    y_pred = self._get_mean(k_closest, index_closests, rolled_distances)[0]
+                    index_closests, rolled_distances, x_pred_mean = self._get_k_closest_positions(
+                        X_temp, k)
+                    k_closest = self._get_k_closest(
+                        index_closests, x_pred_mean)
+                    y_pred = self._get_mean(
+                        k_closest, index_closests, rolled_distances)[0]
                     y_preds.append(y_pred)
-                    X_temp = np.concatenate((X_temp, np.array([y_pred])), axis=0)[-self.maxlags:]
+                    X_temp = np.concatenate(
+                        (X_temp, np.array([y_pred])), axis=0)[-self.maxlags:]
                 y_preds = np.array(y_preds)
             elif self.msas == "mimo":
-                index_closests, rolled_distances, x_pred_mean = self._get_k_closest_positions(X, k)
+                index_closests, rolled_distances, x_pred_mean = self._get_k_closest_positions(
+                    X, k)
                 k_closest = self._get_k_closest(index_closests, x_pred_mean)
-                y_preds = self._get_mean(k_closest, index_closests, rolled_distances)
+                y_preds = self._get_mean(
+                    k_closest, index_closests, rolled_distances)
             results.append(y_preds)
         if len(results) == 1:
             return results[0]
         return np.mean(results, axis=0)
+
+
+def sum_euclidean(M: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """
+    Calculates the sum of squared Euclidean distances between each row of M and vector v.
+    Args:
+        M (np.ndarray): Sample matrix (n_samples, n_features).
+        v (np.ndarray): Comparison vector (n_features,).
+    Returns:
+        np.ndarray: Array of distances for each row of M.
+    """
+    # https://stackoverflow.com/a/49633639
+    tmp = M - v
+    return np.einsum('ij,ij->i', tmp, tmp)
+
+
+def get_distance(distance: str = "euclidean"):
+    """
+    Returns the appropriate distance function.
+    Args:
+        distance (str): Name of the distance metric.
+    Returns:
+        Callable: Distance function.
+    """
+    if distance == "euclidean":
+        return sum_euclidean
+    return sum_euclidean

@@ -1,4 +1,4 @@
-from tsknn.tsknn import tsknn
+from tsknn import tsknn
 from numpy.testing import assert_almost_equal
 import pandas as pd
 import numpy as np
