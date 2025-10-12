@@ -56,11 +56,7 @@ class tsknn:
         self.func_distance = get_distance(distance)
         self.h = h
         self.msas = msas.lower()
-        if self.msas == "recursive":
-            self.h_ef = 1
-        else:
-            self.h_ef = h
-        self.kmeans = kmeans
+        self.h_ef = 1 if self.msas == "recursive" else h
         self.random_state = random_state
         self.force_stable = force_stable
 
@@ -92,35 +88,16 @@ class tsknn:
         else:
             self.lag_indices = None
 
-        if self.transform == "multiplicative" and not self.kmeans:
+        if self.transform == "multiplicative":
             self.x_mean = self.windowed_arr.mean(axis=1)
             self.windowed_arr = self.windowed_arr / self.x_mean[:, np.newaxis]
-        elif self.transform == "additive" and not self.kmeans:
+        elif self.transform == "additive":
             self.x_mean = self.windowed_arr.mean(axis=1)
             self.windowed_arr = self.windowed_arr - self.x_mean[:, np.newaxis]
 
         self.windowed_arr = self.windowed_arr[
             :(1 - self.h_ef) if 1 - self.h_ef != 0 else None, :
         ]
-
-        # if self.kmeans:
-        #     from sklearn.cluster import KMeans
-        #     kmeans_model = KMeans(
-        #         n_clusters=self.kmeans, random_state=self.random_state
-        #     )
-        #     kmeans_model.fit(self.windowed_arr)
-        #     self.kmeans_means = np.array([
-        #         np.mean(self.windowed_arr[kmeans_model.labels_ == i], axis=0)
-        #         for i in range(self.kmeans)
-        #     ])
-        #     self.kmeans_labels = kmeans_model.labels_
-
-        #     if self.transform == "multiplicative":
-        #         self.x_mean = self.kmeans_means.mean(axis=1)
-        #         self.kmeans_means = self.kmeans_means / self.x_mean[:, np.newaxis]
-        #     elif self.transform == "additive":
-        #         self.x_mean = self.kmeans_means.mean(axis=1)
-        #         self.kmeans_means = self.kmeans_means - self.x_mean[:, np.newaxis]
 
     def _get_k_closest_positions(self, x_pred: np.ndarray, k: int = None) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -135,26 +112,28 @@ class tsknn:
             x_pred = x_pred[self.lag_indices]
 
         if self.transform == "multiplicative":
-            self.x_pred_mean = x_pred.mean()
-            x_pred = x_pred / self.x_pred_mean
+            x_pred_mean = x_pred.mean()
+            x_pred = x_pred / x_pred_mean
         elif self.transform == "additive":
-            self.x_pred_mean = x_pred.mean()
-            x_pred = x_pred - self.x_pred_mean
+            x_pred_mean = x_pred.mean()
+            x_pred = x_pred - x_pred_mean
+        else:
+            x_pred_mean = None
 
         # Unnoptimized distance calculation
         # rolled_distances = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=self.windowed_arr)
         # rolled_distances = np.sum((self.windowed_arr - x_pred)**2, axis=-1)
 
-        if self.kmeans:
-            rolled_distances = self.func_distance(self.kmeans_means, x_pred)
-        else:
-            rolled_distances = self.func_distance(self.windowed_arr, x_pred)
+        rolled_distances = self.func_distance(self.windowed_arr, x_pred)
         index_closests = np.argpartition(rolled_distances, range(k))[:k]
         if self.force_stable:
             index_closests = np.argsort(rolled_distances, stable=True)[:k]
-        return index_closests, rolled_distances
+        return index_closests, rolled_distances, x_pred_mean
 
-    def _get_k_closest(self, k_closest: np.ndarray) -> np.ndarray:
+    def _get_k_closest(self,
+                       k_closest: np.ndarray,
+                       x_pred_mean: np.ndarray
+                       ) -> np.ndarray:
         """
         Returns the sequences of the k nearest neighbors.
         Args:
@@ -162,24 +141,6 @@ class tsknn:
         Returns:
             np.ndarray: Sequences of the neighbors.
         """
-        # if self.kmeans:
-        #     result_final = np.zeros((len(k_closest), self.h_ef))
-        #     for j, cluster in enumerate(k_closest):
-        #         eqcluster = [idx for idx, value in enumerate(self.kmeans_labels == cluster) if value]
-
-        #         result = np.zeros((len(eqcluster), self.h_ef))
-        #         for i, pos in enumerate(eqcluster):
-        #             if pos + self.h_ef <= self.X.shape[0]:
-        #                 result[i] = self.X[pos:pos + self.h_ef]
-        #         result = result.mean(0)
-        #         result_final[j] = result
-
-        #     if self.transform == "multiplicative":
-        #         return (result_final / self.x_mean[k_closest, np.newaxis]) * self.x_pred_mean
-        #     elif self.transform == "additive":
-        #         return (result_final - self.x_mean[k_closest, np.newaxis]) + self.x_pred_mean
-
-        #     return result_final
 
         k_closest = (
             k_closest[:, np.newaxis]
@@ -192,13 +153,13 @@ class tsknn:
             return (
                 np.take(X, k_closest - self.maxlags)
                 / (self.x_mean[k_closest[:, 0] - self.maxlags, np.newaxis])
-            ) * self.x_pred_mean
+            ) * x_pred_mean
         elif self.transform == "additive":
             X = self.X[self.maxlags:]
             return (
                 np.take(X, k_closest - self.maxlags)
                 - (self.x_mean[k_closest[:, 0] - self.maxlags, np.newaxis])
-            ) + self.x_pred_mean
+            ) + x_pred_mean
 
         return np.take(self.X, k_closest)
 
@@ -253,15 +214,15 @@ class tsknn:
                 y_preds = []
                 X_temp = np.copy(X)
                 for _ in range(self.h):
-                    index_closests, rolled_distances = self._get_k_closest_positions(X_temp, k)
-                    k_closest = self._get_k_closest(index_closests)
+                    index_closests, rolled_distances, x_pred_mean = self._get_k_closest_positions(X_temp, k)
+                    k_closest = self._get_k_closest(index_closests, x_pred_mean)
                     y_pred = self._get_mean(k_closest, index_closests, rolled_distances)[0]
                     y_preds.append(y_pred)
                     X_temp = np.concatenate((X_temp, np.array([y_pred])), axis=0)[-self.maxlags:]
                 y_preds = np.array(y_preds)
             elif self.msas == "mimo":
-                index_closests, rolled_distances = self._get_k_closest_positions(X, k)
-                k_closest = self._get_k_closest(index_closests)
+                index_closests, rolled_distances, x_pred_mean = self._get_k_closest_positions(X, k)
+                k_closest = self._get_k_closest(index_closests, x_pred_mean)
                 y_preds = self._get_mean(k_closest, index_closests, rolled_distances)
             results.append(y_preds)
         if len(results) == 1:
