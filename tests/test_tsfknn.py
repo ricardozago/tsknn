@@ -7,6 +7,9 @@ from numpy.testing import assert_almost_equal
 from tsknn import tsknn
 
 
+# in this test we will compare the results of tsknn with tsfknn 0.6.0 R package
+# https://cran.r-project.org/web/packages/tsfknn/index.html
+
 np.random.seed(42)
 X = np.random.rand(1000)
 
