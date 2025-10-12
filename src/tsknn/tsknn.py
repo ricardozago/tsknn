@@ -87,7 +87,10 @@ class tsknn:
         )
 
         if isinstance(self.lags, list):
-            self.windowed_arr = self.windowed_arr[:, [self.maxlags - lag for lag in self.lags]]
+            self.lag_indices = np.array([self.maxlags - lag for lag in self.lags])
+            self.windowed_arr = self.windowed_arr[:, self.lag_indices]
+        else:
+            self.lag_indices = None
 
         if self.transform == "multiplicative" and not self.kmeans:
             self.x_mean = self.windowed_arr.mean(axis=1)
@@ -128,11 +131,8 @@ class tsknn:
             Tuple[np.ndarray, np.ndarray]: Indices of neighbors and distances.
         """
 
-        # rolled_distances = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=self.windowed_arr)
-        # rolled_distances = np.sum((self.windowed_arr - x_pred)**2, axis=-1)
-
-        if isinstance(self.lags, list):
-            x_pred = x_pred[[self.maxlags - x for x in self.lags]]
+        if self.lag_indices is not None:
+            x_pred = x_pred[self.lag_indices]
 
         if self.transform == "multiplicative":
             self.x_pred_mean = x_pred.mean()
@@ -140,6 +140,10 @@ class tsknn:
         elif self.transform == "additive":
             self.x_pred_mean = x_pred.mean()
             x_pred = x_pred - self.x_pred_mean
+
+        # Unnoptimized distance calculation
+        # rolled_distances = np.apply_along_axis(lambda x: self.func_distance(x, x_pred), axis=-1, arr=self.windowed_arr)
+        # rolled_distances = np.sum((self.windowed_arr - x_pred)**2, axis=-1)
 
         if self.kmeans:
             rolled_distances = self.func_distance(self.kmeans_means, x_pred)
@@ -198,10 +202,12 @@ class tsknn:
 
         return np.take(self.X, k_closest)
 
-    def _get_mean(self, 
-                  k_closest: np.ndarray,
-                  index_closests: np.ndarray,
-                  rolled_distances: np.ndarray) -> np.ndarray:
+    def _get_mean(
+        self,
+        k_closest: np.ndarray,
+        index_closests: np.ndarray,
+        rolled_distances: np.ndarray
+    ) -> np.ndarray:
         """
         Returns the mean of the neighbors according to the combination function.
         Args:
@@ -222,7 +228,7 @@ class tsknn:
             return reciprocal_d.dot(k_closest) / reciprocal_d.sum()
         return k_closest.mean(axis=0)
 
-    def predict(self, X=None) -> np.ndarray:
+    def predict(self, X: np.ndarray = None) -> np.ndarray:
         """
         Makes predictions for the defined horizon.
         Args:
@@ -245,7 +251,7 @@ class tsknn:
         for k in k_list:
             if self.msas == "recursive":
                 y_preds = []
-                X_temp = X.copy() if X is not None else None
+                X_temp = np.copy(X)
                 for _ in range(self.h):
                     index_closests, rolled_distances = self._get_k_closest_positions(X_temp, k)
                     k_closest = self._get_k_closest(index_closests)
