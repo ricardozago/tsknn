@@ -2,9 +2,9 @@
 
 [![PyPI version](https://badge.fury.io/py/tsknn.svg)](https://badge.fury.io/py/tsknn)
 [![Build Status](https://github.com/ricardozago/tsknn/actions/workflows/python-app.yml/badge.svg)](https://github.com/ricardozago/tsknn/actions)
-[![Coverage Status](https://coveralls.io/repos/github/ricardozago/tsknn/badge.svg?branch=main)](https://coveralls.io/github/ricardozago/tsknn?branch=main)
 
-TSKNN (Time Series K-Nearest Neighbors) é uma biblioteca Python para previsão de séries temporais baseada em KNN, suportando estratégias multi-step, diferentes funções de combinação e transformações.
+
+TSKNN (Time Series K-Nearest Neighbors) is a Python implementation of the k-nearest neighbors (KNN) algorithm aimed at time series forecasting.
 
 ## Instalação
 
@@ -43,7 +43,6 @@ print(forecast)
 Para rodar os testes e verificar cobertura:
 
 ```bash
-cd src
 python -m pytest --cov=tsknn --cov-report term-missing
 ```
 
