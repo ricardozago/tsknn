@@ -20,7 +20,7 @@ class tsknn:
         random_state (int|None): Seed for reproducibility.
     """
     def __init__(self,
-                 k: int = 3,
+                 k=3,
                  cf: str = "mean",
                  transform: str = None,
                  lags=3,
@@ -31,8 +31,8 @@ class tsknn:
                  random_state: int = None,
                  force_stable: bool = False
                  ):
-        if not isinstance(k, int) or k < 1:
-            raise ValueError("k must be a positive integer.")
+        if not (isinstance(k, int) and k >= 1) and not (isinstance(k, list) and all(isinstance(ki, int) and ki >= 1 for ki in k)):
+            raise ValueError("k must be a positive integer or a list of positive integers.")
         if cf.lower() not in {"mean", "median", "weighted"}:
             raise ValueError("cf must be 'mean', 'median' or 'weighted'.")
         if transform is not None and transform.lower() not in {"additive", "multiplicative"}:
@@ -76,7 +76,7 @@ class tsknn:
             raise TypeError("X must be a np.ndarray.")
         if X.ndim != 1:
             raise ValueError("X must be a one-dimensional array.")
-        if self.msas == 'mimo' and (self.h + self.maxlags + self.k >= X.shape[0]):
+        if self.msas == 'mimo' and (self.h + self.maxlags + np.max(self.k) >= X.shape[0]):
             raise ValueError(
                 'You need a bigger series, or change the mode to recursive'
             )
@@ -119,7 +119,7 @@ class tsknn:
         #         self.x_mean = self.kmeans_means.mean(axis=1)
         #         self.kmeans_means = self.kmeans_means - self.x_mean[:, np.newaxis]
 
-    def _get_k_closest_positions(self, x_pred: np.ndarray):
+    def _get_k_closest_positions(self, x_pred: np.ndarray, k: int = None) -> tuple[np.ndarray, np.ndarray]:
         """
         Returns the positions of the k nearest neighbors.
         Args:
@@ -145,10 +145,9 @@ class tsknn:
             rolled_distances = self.func_distance(self.kmeans_means, x_pred)
         else:
             rolled_distances = self.func_distance(self.windowed_arr, x_pred)
-        index_closests = np.argpartition(rolled_distances, range(self.k))[:self.k]
+        index_closests = np.argpartition(rolled_distances, range(k))[:k]
         if self.force_stable:
-            index_closests = np.argsort(rolled_distances, stable=True)[:self.k]
-        # distances = self.X.shape[0] - index_closests
+            index_closests = np.argsort(rolled_distances, stable=True)[:k]
         return index_closests, rolled_distances
 
     def _get_k_closest(self, k_closest: np.ndarray) -> np.ndarray:
@@ -241,17 +240,24 @@ class tsknn:
             raise ValueError("X must be a one-dimensional array.")
         if X.shape[0] != self.maxlags:
             raise ValueError('The biggest lag is different from the length of the example to predict')
-        if self.msas == "recursive":
-            y_preds = []
-            for _ in range(self.h):
-                index_closests, rolled_distances = self._get_k_closest_positions(X)
+        k_list = self.k if isinstance(self.k, list) else [self.k]
+        results = []
+        for k in k_list:
+            if self.msas == "recursive":
+                y_preds = []
+                X_temp = X.copy() if X is not None else None
+                for _ in range(self.h):
+                    index_closests, rolled_distances = self._get_k_closest_positions(X_temp, k)
+                    k_closest = self._get_k_closest(index_closests)
+                    y_pred = self._get_mean(k_closest, index_closests, rolled_distances)[0]
+                    y_preds.append(y_pred)
+                    X_temp = np.concatenate((X_temp, np.array([y_pred])), axis=0)[-self.maxlags:]
+                y_preds = np.array(y_preds)
+            elif self.msas == "mimo":
+                index_closests, rolled_distances = self._get_k_closest_positions(X, k)
                 k_closest = self._get_k_closest(index_closests)
-                y_pred = self._get_mean(k_closest, index_closests, rolled_distances)[0]
-                y_preds.append(y_pred)
-                X = np.concatenate((X, np.array([y_pred])), axis=0)[-self.maxlags:]
-            y_preds = np.array(y_preds)
-        elif self.msas == "mimo":
-            index_closests, rolled_distances = self._get_k_closest_positions(X)
-            k_closest = self._get_k_closest(index_closests)
-            y_preds = self._get_mean(k_closest, index_closests, rolled_distances)
-        return y_preds
+                y_preds = self._get_mean(k_closest, index_closests, rolled_distances)
+            results.append(y_preds)
+        if len(results) == 1:
+            return results[0]
+        return np.mean(results, axis=0)
