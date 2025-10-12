@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from numpy.testing import assert_almost_equal
+
 from tsknn import tsknn
 
 df = pd.read_csv("data/AirPassengers.csv")

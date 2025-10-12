@@ -1,11 +1,12 @@
-import numpy as np
 from itertools import product
-from rpy2.robjects import r, pandas2ri, globalenv
-from rpy2.robjects.conversion import localconverter
-from rpy2.robjects.vectors import IntVector, FloatVector
-from numpy.testing import assert_almost_equal
-from tsknn import tsknn
 
+import numpy as np
+from numpy.testing import assert_almost_equal
+from rpy2.robjects import globalenv, pandas2ri, r
+from rpy2.robjects.conversion import localconverter
+from rpy2.robjects.vectors import FloatVector, IntVector
+
+from tsknn import tsknn
 
 # in this test we will compare the results of tsknn with tsfknn 0.6.0 R package
 # https://cran.r-project.org/web/packages/tsfknn/index.html
