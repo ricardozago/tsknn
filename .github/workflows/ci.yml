@@ -21,7 +21,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install .[dev]
-          pip install isort black pytest
+          pip install isort black pytest rpy2 pandas numpy
       - name: Check formatting
         run: |
           isort --check tsknn tests

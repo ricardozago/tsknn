@@ -3,8 +3,9 @@
 [![PyPI version](https://badge.fury.io/py/tsknn.svg)](https://badge.fury.io/py/tsknn)
 [![Build Status](https://github.com/ricardozago/tsknn/actions/workflows/python-app.yml/badge.svg)](https://github.com/ricardozago/tsknn/actions)
 
+*TSKNN* (Time Series K-Nearest Neighbors) is a Python implementation of the k-nearest neighbors (KNN) algorithm designed specifically for time series forecasting.
 
-TSKNN (Time Series K-Nearest Neighbors) is a Python implementation of the k-nearest neighbors (KNN) algorithm aimed at time series forecasting.
+It is a pure Python and NumPy reimplementation of the [tsfknn](https://github.com/franciscomartinezdelrio/tsfknn) package from R—completely rewritten from scratch without relying on C extensions. By leveraging optimized NumPy operations, TSKNN achieves high performance while remaining lightweight and easy to install.
 
 ## Instalação
 
