@@ -14,8 +14,7 @@ class tsknn:
         distance (str): Distance metric ('euclidean').
         h (int): Forecast horizon.
         msas (str): Multi-step strategy ('recursive' or 'mimo').
-        kmeans (int|None): Number of clusters for KMeans (optional).
-        random_state (int|None): Seed for reproducibility.
+        random_state (int|None): Seed for reproducibility if in the future we add some randomness.
     """
 
     def __init__(
@@ -27,8 +26,7 @@ class tsknn:
         distance: str = "euclidean",
         h: int = 12,
         msas: str = "recursive",
-        kmeans: int = None,
-        random_state: int = None,
+        random_state: int = 42,
         force_stable: bool = False,
     ):
         if not (isinstance(k, int) and k >= 1) and not (
@@ -55,8 +53,6 @@ class tsknn:
             raise ValueError("h must be a positive integer.")
         if msas.lower() not in {"recursive", "mimo"}:
             raise ValueError("msas must be 'recursive' or 'mimo'.")
-        if kmeans is not None and (not isinstance(kmeans, int) or kmeans < 1):
-            raise ValueError("kmeans must be None or a positive integer.")
         if random_state is not None and not isinstance(random_state, int):
             raise ValueError("random_state must be None or an integer.")
 
@@ -69,7 +65,6 @@ class tsknn:
         self.h = h
         self.msas = msas.lower()
         self.h_ef = 1 if self.msas == "recursive" else h
-        self.random_state = random_state
         self.force_stable = force_stable
 
     def fit(self, X: np.ndarray) -> None:
