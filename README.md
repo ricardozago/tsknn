@@ -1,158 +1,62 @@
 # tsknn
 
-`tsknn` is a Python implementation of the k-nearest neighbors (KNN) algorithm aimed at time series forecasting. The package provides utilities for lag selection, hyperparameter optimisation and multiple forecasting strategies.
+[![PyPI version](https://badge.fury.io/py/tsknn.svg)](https://badge.fury.io/py/tsknn)
+[![Build Status](https://github.com/ricardozago/tsknn/actions/workflows/python-app.yml/badge.svg)](https://github.com/ricardozago/tsknn/actions)
+[![Coverage Status](https://coveralls.io/repos/github/ricardozago/tsknn/badge.svg?branch=main)](https://coveralls.io/github/ricardozago/tsknn?branch=main)
 
-## Key features
+TSKNN (Time Series K-Nearest Neighbors) é uma biblioteca Python para previsão de séries temporais baseada em KNN, suportando estratégias multi-step, diferentes funções de combinação e transformações.
 
-- Support for several distance metrics: `euclidean`, `manhattan`, `chebyshev`, `cosine` and `dtw`.
-- Different aggregation schemes for neighbours (`cf`): mean, median, weighted or trimmed.
-- MIMO, recursive and direct forecasting modes (`msas`).
-- Additive or multiplicative transformations for trend removal.
-- `optimize_params` helper to search for the best hyperparameters.
-- Cross validation via `cross_validate_params` to choose `k` and `lags`.
-- Optimisation by *grid search*, *random search* or Bayesian approach.
-- Optional handling of missing values with the `nan_strategy` argument.
-- Weight neighbours by recency or real distance through `weight_by`.
-- Multivariate forecasting via the `tsknn` class.
-
-## Installation
+## Instalação
 
 ```bash
 pip install tsknn
 ```
 
-For local development clone the repository and install it in editable mode:
+Ou clone o repositório e instale localmente:
 
 ```bash
-pip install -e .
+git clone https://github.com/ricardozago/tsknn.git
+cd tsknn
+pip install .
 ```
 
-## Quick example
-
-The example below uses the air passengers data in `data/AirPassengers.csv` to forecast the next 12 months.
+## Exemplo de uso
 
 ```python
-import pandas as pd
+import numpy as np
 from tsknn import tsknn
 
-df = pd.read_csv("data/AirPassengers.csv")
-df["Month"] = pd.to_datetime(df["Month"])
-df.set_index("Month", inplace=True)
-df = df.asfreq("MS")
-df.columns = ["passengers"]
-X = df["passengers"].values
+# Série temporal de exemplo
+y = np.sin(np.linspace(0, 10, 100))
 
-lags = 3
-X_pred = X[-lags:]
-model = tsknn(k=3, h=12, transform="multiplicative", lags=lags,
-              nan_strategy="interpolate")
-model.fit(X)
-forecast = model.predict(X_pred)
-print(forecast)
-```
-A full script can be found at `examples/knn_example.py`.
+# Instancia e ajusta o modelo
+model = tsknn(k=3, lags=5, h=10)
+model.fit(y)
 
-`tsknn` also works with multivariate inputs:
-
-```python
-from tsknn import tsknn
-df["passengers2"] = df["passengers"] * 1.1
-X_multi = df[["passengers", "passengers2"]].values
-model = tsknn(k=3, h=12, lags=3)
-model.fit(X_multi)
-forecast = model.predict(X_multi[-3:])
+# Faz previsão
+forecast = model.predict()
 print(forecast)
 ```
 
-## Hyperparameter optimisation
+## Testes
 
-Use `optimize_params` to find the best combination of parameters. Provide a `param_grid` with the values to test and a validation series. The metric can be passed as name or function.
-You can also define the search method with the `method` argument.
-
-```python
-from tsknn import optimize_params
-
-param_grid = {
-    "k": [2, 3, 4],
-    "lags": [3, 5],
-    "h": [12]
-}
-# choose the metric among "rmse", "mae" or "mape"
-best, score = optimize_params(X, param_grid, metric="mae", method="random", n_iter=10)
-print(best, score)
-
-To evaluate combinations across multiple splits of the series use `cross_validate_params`:
-
-```python
-from tsknn import cross_validate_params
-
-best, score = cross_validate_params(X, param_grid, n_splits=3)
-print(best, score)
-```
-
-## Automatic model selection
-
-To automate the search and return a trained model, use `autotsknn`.
-It evaluates different combinations of `k` and `lags` and returns the best model.
-```python
-from tsknn import autotsknn
-
-# runs the search using default values for k and lags
-# Bayesian optimisation is used by default
-model, params, score = autotsknn(X, h=12, n_iter=15, random_state=0)
-print(params, score)
-```
-
-## Additional examples
-
-The `examples/` folder contains complete scripts demonstrating different usage flows:
-- `knn_example.py` – direct execution of `tsknn` forecasting 5 values.
-- `optimize_params_example.py` – usage of `optimize_params` to search for the best hyperparameters.
-- `autotsknn_example.py` – automatic selection of `k` and `lags` with Bayesian optimisation.
-- `custom_metric_example.py` – performing parameter search with a user defined metric.
-- `sklearn_pipeline_example.py` – integration of `tsknn` inside a scikit-learn pipeline.
-
-Run the scripts with Python to see the results in action, for example:
+Para rodar os testes e verificar cobertura:
 
 ```bash
-python examples/optimize_params_example.py
+cd src
+python -m pytest --cov=tsknn --cov-report term-missing
 ```
 
-## Model persistence
+## Contribuindo
 
-`tsknn` models can be saved to disk and loaded back:
+Contribuições são bem-vindas! Abra issues ou pull requests.
 
-```python
-model = tsknn(lags=3, h=2)
-model.fit(X)
-model.save("model.pkl")
+1. Fork o projeto
+2. Crie sua branch (`git checkout -b feature/nome-feature`)
+3. Commit suas mudanças (`git commit -am 'feat: nova feature'`)
+4. Push para o branch (`git push origin feature/nome-feature`)
+5. Abra um Pull Request
 
-loaded = tsknn.load("model.pkl")
-preds = loaded.predict(X[-3:])
-```
+## Licença
 
-## scikit-learn compatibility
-
-`tsknn` implements the `BaseEstimator` and `RegressorMixin` APIs so it can be
-used in scikit-learn pipelines:
-
-```python
-from sklearn.pipeline import Pipeline
-from tsknn import tsknn
-
-pipeline = Pipeline([("model", tsknn(lags=3, h=2))])
-pipeline.fit(X)
-preds = pipeline.predict(X[-3:])
-```
-
-## Tests
-Unit tests can be run with `pytest` after installing the development dependencies:
-
-```bash
-pip install -r requirements-dev.txt
-pytest
-```
-
-## Licence
-
-Distributed under the MIT licence. See the `LICENSE` file for further information.
+Este projeto está licenciado sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
