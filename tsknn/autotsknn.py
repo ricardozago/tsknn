@@ -1,7 +1,12 @@
 import numpy as np
 import optuna
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_absolute_percentage_error,
+    mean_squared_error,
+)
 from statsmodels.tsa.stattools import adfuller, pacf
-from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+
 from tsknn.tsknn import tsknn
 
 
@@ -53,7 +58,9 @@ class autotsknn:
             params = {
                 "k": trial.suggest_int("k", 1, k_max),
                 "cf": trial.suggest_categorical("cf", ["mean", "median", "weighted"]),
-                "distance": trial.suggest_categorical("distance", ["euclidean", "manhattan"]),
+                "distance": trial.suggest_categorical(
+                    "distance", ["euclidean", "manhattan"]
+                ),
                 "h": len(test),
             }
 
@@ -65,10 +72,12 @@ class autotsknn:
                 )
 
             if lags == "auto":
-                n_lags = trial.suggest_int("n_lags", 1, min(20, len(train) - len(test) -1))
-                params['lags'] = list(range(1, n_lags + 1))
+                n_lags = trial.suggest_int(
+                    "n_lags", 1, min(20, len(train) - len(test) - 1)
+                )
+                params["lags"] = list(range(1, n_lags + 1))
             else:
-                params['lags'] = lags
+                params["lags"] = lags
 
             model = tsknn(**params)
             model.fit(train)
@@ -116,7 +125,7 @@ class autotsknn:
         self.model_ = tsknn(**final_params)
         self.model_.fit(X)
 
-        return self.model_
+        return self
 
     def predict(self, h):
         if not hasattr(self, "model_"):

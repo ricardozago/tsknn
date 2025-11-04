@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+
 from tsknn.autotsknn import autotsknn
 
 df = pd.read_csv("data/AirPassengers.csv")
