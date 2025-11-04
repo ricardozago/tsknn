@@ -1,12 +1,19 @@
 from itertools import product
 
 import numpy as np
+import pytest
 from numpy.testing import assert_almost_equal
-from rpy2.robjects import globalenv, pandas2ri, r
-from rpy2.robjects.conversion import localconverter
-from rpy2.robjects.vectors import FloatVector, IntVector
 
 from tsknn import tsknn
+
+try:
+    from rpy2.robjects import globalenv, pandas2ri, r
+    from rpy2.robjects.conversion import localconverter
+    from rpy2.robjects.vectors import FloatVector, IntVector
+
+    RPY2_INSTALLED = True
+except ImportError:
+    RPY2_INSTALLED = False
 
 # in this test we will compare the results of tsknn with tsfknn 0.6.0 R package
 # https://cran.r-project.org/web/packages/tsfknn/index.html
@@ -47,6 +54,7 @@ def tsfknn(X, h, transform, lags, msas, k, cf):
     return pred_py
 
 
+@pytest.mark.skipif(not RPY2_INSTALLED, reason="rpy2 is not installed")
 def test_tsfknn():
     cf_options = ["mean", "median"]  # weighted
     msas_options = ["MIMO", "recursive"]
@@ -84,6 +92,7 @@ def test_tsfknn():
         assert_almost_equal(tsknn_resp, tsfknn_resp, decimal=5)
 
 
+@pytest.mark.skipif(not RPY2_INSTALLED, reason="rpy2 is not installed")
 def test_tsfknn_weighted():
     # Testar weighted é complicado, pois quando uma das distâncias é muito
     # próxima de zero, o resultado pode divergir da tsfknn

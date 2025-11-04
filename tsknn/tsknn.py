@@ -55,6 +55,8 @@ class tsknn:
             raise ValueError("msas must be 'recursive' or 'mimo'.")
         if random_state is not None and not isinstance(random_state, int):
             raise ValueError("random_state must be None or an integer.")
+        if distance.lower() not in {"euclidean", "manhattan"}:
+            raise ValueError("distance must be 'euclidean' or 'manhattan'.")
 
         self.k = k
         self.cf = cf.lower()
@@ -199,6 +201,57 @@ class tsknn:
             return reciprocal_d.dot(k_closest) / reciprocal_d.sum()
         return k_closest.mean(axis=0)
 
+    def _predict_mimo(self, X: np.ndarray, k: int) -> np.ndarray:
+        """
+        Makes predictions using the MIMO strategy.
+        Args:
+            X (np.ndarray): Input vector.
+            k (int): Number of neighbors.
+        Returns:
+            np.ndarray: Predictions.
+        """
+        index_closests, rolled_distances, x_pred_mean = self._get_k_closest_positions(
+            X, k
+        )
+        k_closest = self._get_k_closest(index_closests, x_pred_mean)
+        return self._get_mean(k_closest, index_closests, rolled_distances)
+
+    def _predict_recursive(self, X: np.ndarray, k: int) -> np.ndarray:
+        """
+        Makes predictions using the recursive strategy.
+        Args:
+            X (np.ndarray): Input vector.
+            k (int): Number of neighbors.
+        Returns:
+            np.ndarray: Predictions.
+        """
+        y_preds = []
+        X_temp = np.copy(X)
+        for _ in range(self.h):
+            index_closests, rolled_distances, x_pred_mean = (
+                self._get_k_closest_positions(X_temp, k)
+            )
+            k_closest = self._get_k_closest(index_closests, x_pred_mean)
+            y_pred = self._get_mean(k_closest, index_closests, rolled_distances)[0]
+            y_preds.append(y_pred)
+            X_temp = np.concatenate((X_temp, np.array([y_pred])), axis=0)[
+                -self.maxlags :
+            ]
+        return np.array(y_preds)
+
+    def _predict_for_k(self, X: np.ndarray, k: int) -> np.ndarray:
+        """
+        Makes predictions for a single k value.
+        Args:
+            X (np.ndarray): Input vector.
+            k (int): Number of neighbors.
+        Returns:
+            np.ndarray: Predictions.
+        """
+        if self.msas == "recursive":
+            return self._predict_recursive(X, k)
+        return self._predict_mimo(X, k)
+
     def predict(self, X: np.ndarray = None) -> np.ndarray:
         """
         Makes predictions for the defined horizon.
@@ -219,32 +272,10 @@ class tsknn:
             raise ValueError(
                 "The biggest lag is different from the length of the example to predict"
             )
+
         k_list = self.k if isinstance(self.k, list) else [self.k]
-        results = []
-        for k in k_list:
-            if self.msas == "recursive":
-                y_preds = []
-                X_temp = np.copy(X)
-                for _ in range(self.h):
-                    index_closests, rolled_distances, x_pred_mean = (
-                        self._get_k_closest_positions(X_temp, k)
-                    )
-                    k_closest = self._get_k_closest(index_closests, x_pred_mean)
-                    y_pred = self._get_mean(
-                        k_closest, index_closests, rolled_distances
-                    )[0]
-                    y_preds.append(y_pred)
-                    X_temp = np.concatenate((X_temp, np.array([y_pred])), axis=0)[
-                        -self.maxlags :
-                    ]
-                y_preds = np.array(y_preds)
-            elif self.msas == "mimo":
-                index_closests, rolled_distances, x_pred_mean = (
-                    self._get_k_closest_positions(X, k)
-                )
-                k_closest = self._get_k_closest(index_closests, x_pred_mean)
-                y_preds = self._get_mean(k_closest, index_closests, rolled_distances)
-            results.append(y_preds)
+        results = [self._predict_for_k(X, k) for k in k_list]
+
         if len(results) == 1:
             return results[0]
         return np.mean(results, axis=0)
@@ -264,6 +295,18 @@ def sum_euclidean(M: np.ndarray, v: np.ndarray) -> np.ndarray:
     return np.einsum("ij,ij->i", tmp, tmp)
 
 
+def sum_manhattan(M: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """
+    Calculates the sum of Manhattan distances between each row of M and vector v.
+    Args:
+        M (np.ndarray): Sample matrix (n_samples, n_features).
+        v (np.ndarray): Comparison vector (n_features,).
+    Returns:
+        np.ndarray: Array of distances for each row of M.
+    """
+    return np.sum(np.abs(M - v), axis=1)
+
+
 def get_distance(distance: str = "euclidean"):
     """
     Returns the appropriate distance function.
@@ -274,4 +317,6 @@ def get_distance(distance: str = "euclidean"):
     """
     if distance == "euclidean":
         return sum_euclidean
-    return sum_euclidean
+    if distance == "manhattan":
+        return sum_manhattan
+    raise ValueError(f"Distance {distance} not supported.")
