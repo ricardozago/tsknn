@@ -55,8 +55,6 @@ class tsknn:
             raise ValueError("msas must be 'recursive' or 'mimo'.")
         if random_state is not None and not isinstance(random_state, int):
             raise ValueError("random_state must be None or an integer.")
-        if distance.lower() not in {"euclidean", "manhattan"}:
-            raise ValueError("distance must be 'euclidean' or 'manhattan'.")
 
         self.k = k
         self.cf = cf.lower()
@@ -199,7 +197,6 @@ class tsknn:
                 return k_closest[0]
             reciprocal_d = 1 / np.sqrt(d)
             return reciprocal_d.dot(k_closest) / reciprocal_d.sum()
-        return k_closest.mean(axis=0)
 
     def _predict_mimo(self, X: np.ndarray, k: int) -> np.ndarray:
         """
